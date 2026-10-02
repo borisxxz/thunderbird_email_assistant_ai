@@ -1,0 +1,160 @@
+/* ============================================================
+   Email Assistant 设计令牌 v1.0（三页共享，亮暗双主题）
+   ============================================================ */
+:root {
+  --indigo-300: #A5ADF3;
+  --indigo-400: #7B87E8;
+  --indigo-500: #5E6AD2;
+  --indigo-600: #4C5FD7;
+  --indigo-700: #3F51C2;
+  --indigo-800: #32419E;
+
+  --gray-0:   #FFFFFF;
+  --gray-50:  #F7F7F9;
+  --gray-100: #F1F2F5;
+  --gray-200: #E4E5EA;
+  --gray-300: #CDD0DA;
+  --gray-400: #A9ADBE;
+  --gray-500: #8388A0;
+  --gray-600: #6B7080;
+  --gray-700: #4E5261;
+  --gray-800: #2E303C;
+  --gray-850: #24252F;
+  --gray-900: #1D1E26;
+  --gray-950: #15161C;
+
+  --green-600:  #1A7F37;
+  --green-400:  #4CC38A;
+  --amber-700:  #8A5A00;
+  --amber-500:  #E3A008;
+  --red-600:    #CF222E;
+  --red-500:    #F85149;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI",
+               "PingFang SC", "Microsoft YaHei UI", "Noto Sans SC",
+               "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SF Mono", "Cascadia Mono", "JetBrains Mono",
+               Consolas, "Liberation Mono", Menlo, monospace;
+
+  --text-xs:    11px;
+  --text-sm:    12px;
+  --text-base:  13px;
+  --text-body:  14px;
+  --text-md:    16px;
+  --text-lg:    18px;
+  --text-xl:    22px;
+  --leading-tight:  1.25;
+  --leading-normal: 1.45;
+  --leading-loose:  1.65;
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  --radius-xs:   4px;
+  --radius-sm:   6px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-full: 999px;
+
+  --control-h-sm:  28px;
+  --control-h-md:  32px;
+  --control-h-lg:  40px;
+  --control-h-xl:  44px;
+
+  --shadow-sm: 0 1px 2px rgba(23, 25, 35, 0.06);
+  --shadow-md: 0 4px 12px rgba(23, 25, 35, 0.08);
+  --shadow-lg: 0 12px 32px rgba(23, 25, 35, 0.16);
+
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 240ms;
+  --ease-out:   cubic-bezier(0.2, 0.8, 0.3, 1);
+  --ease-inout: cubic-bezier(0.6, 0.0, 0.4, 1);
+
+  --z-sticky:   100;
+  --z-dropdown: 200;
+  --z-toast:    900;
+  --z-modal:    1000;
+
+  --bg:            var(--gray-50);
+  --surface:       var(--gray-0);
+  --surface-2:     var(--gray-100);
+  --surface-hover: #EDEEF3;
+  --text-1:        var(--gray-900);
+  --text-2:        var(--gray-700);
+  --text-3:        var(--gray-600);
+  --border-1:      var(--gray-200);
+  --border-2:      var(--gray-300);
+
+  --accent:            var(--indigo-600);
+  --accent-hover:      var(--indigo-700);
+  --accent-active:     var(--indigo-800);
+  --accent-on:         #FFFFFF;
+  --accent-subtle:     #EEF0FC;
+  --accent-subtle-text: #3A49B8;
+  --accent-border:     #B9C0EF;
+
+  --success:       var(--green-600);
+  --success-subtle: #E9F5EC;
+  --warning:       var(--amber-700);
+  --warning-subtle: #FBF1DC;
+  --danger:        var(--red-600);
+  --danger-hover:  #B62B36;
+  --danger-subtle: #FDEBEC;
+
+  --overlay:   rgba(23, 25, 35, 0.48);
+  --focus-ring-color: var(--accent);
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus-ring-color);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:            var(--gray-950);
+    --surface:       var(--gray-900);
+    --surface-2:     var(--gray-850);
+    --surface-hover: #2B2D3A;
+    --text-1:        #F2F3F7;
+    --text-2:        #B3B7C6;
+    --text-3:        var(--gray-500);
+    --border-1:      var(--gray-800);
+    --border-2:      #424454;
+
+    --accent:            var(--indigo-500);
+    --accent-hover:      var(--indigo-400);
+    --accent-active:     var(--indigo-600);
+    --accent-on:         #FFFFFF;
+    --accent-subtle:     rgba(94, 106, 210, 0.18);
+    --accent-subtle-text: var(--indigo-300);
+    --accent-border:     #4A54A8;
+
+    --success:        var(--green-400);
+    --success-subtle: rgba(76, 195, 138, 0.14);
+    --warning:        var(--amber-500);
+    --warning-subtle: rgba(227, 160, 8, 0.14);
+    --danger:         var(--red-500);
+    --danger-hover:   #FA7A72;
+    --danger-subtle:  rgba(248, 81, 73, 0.14);
+
+    --overlay:   rgba(0, 0, 0, 0.62);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.50);
+    --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.60);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms; --dur-base: 0ms; --dur-slow: 0ms;
+  }
+}

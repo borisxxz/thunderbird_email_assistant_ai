@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Email Assistant</title>
+  <link rel="stylesheet" type="text/css" href="styles/tokens.css">
+  <link rel="stylesheet" type="text/css" href="styles/base.css">
+  <link rel="stylesheet" type="text/css" href="styles/popup.css">
+</head>
+<body class="ea-page">
+
+  <header class="ea-popup__head">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+      <rect x="1.5" y="3" width="13" height="10" rx="1.5"/>
+      <path d="M2 4.5 8 9l6-4.5"/>
+    </svg>
+    <span id="popup-title">Email Assistant</span>
+  </header>
+
+  <main class="ea-popup__body" id="popup-body" data-phase="idle">
+
+    <section data-view="empty">
+      <div class="ea-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <rect x="2.5" y="5" width="19" height="14" rx="2"/>
+          <path d="M3 7l9 6 9-6"/>
+        </svg>
+        <div class="ea-empty__title" id="empty-title"></div>
+        <div class="ea-empty__desc" id="empty-desc"></div>
+        <button class="ea-btn ea-btn--secondary" id="btn-refresh"></button>
+      </div>
+    </section>
+
+    <section data-view="idle">
+      <div>
+        <div class="ea-popup__title" id="idle-title"></div>
+        <p class="ea-popup__desc" id="idle-desc"></p>
+      </div>
+      <div class="ea-action-block">
+        <div class="ea-action-label" id="action-label"></div>
+        <div class="ea-action-seg" id="action-seg" role="radiogroup" aria-labelledby="action-label">
+          <button type="button" data-action="tag" id="action-tag"></button>
+          <button type="button" data-action="tag_move" id="action-tagmove"></button>
+          <button type="button" data-action="move" id="action-move"></button>
+        </div>
+      </div>
+      <button class="ea-btn ea-btn--primary ea-btn--xl" id="btn-start" autofocus>
+        <span id="btn-start-label"></span>
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3.5 11 8l-5 4.5"/></svg>
+      </button>
+    </section>
+
+    <section data-view="running">
+      <div class="ea-progress-meta">
+        <span class="ea-progress-meta__label" id="run-label"></span>
+        <span class="ea-progress-meta__pct" id="run-pct">0%</span>
+      </div>
+      <div class="ea-progress" role="progressbar" id="run-progress" aria-valuemin="0" aria-valuemax="100">
+        <div class="ea-progress__fill" id="run-fill"></div>
+      </div>
+      <div class="ea-current-subject" id="run-subject"></div>
+      <div style="display:flex; justify-content:center;">
+        <button class="ea-btn ea-btn--secondary" id="btn-cancel"></button>
+      </div>
+    </section>
+
+    <section data-view="review">
+      <div>
+        <div class="ea-popup__title" id="review-title"></div>
+        <p class="ea-popup__desc" id="review-desc"></p>
+      </div>
+      <div class="ea-review-list" id="review-list"></div>
+      <div style="display:flex; gap:8px;">
+        <button class="ea-btn ea-btn--primary ea-btn--lg" id="btn-apply" style="flex:1;"></button>
+        <button class="ea-btn ea-btn--secondary" id="btn-review-discard"></button>
+      </div>
+    </section>
+
+    <section data-view="done">
+      <div class="ea-stats">
+        <div class="ea-stat ea-stat--ok">
+          <span class="ea-stat__num" id="ok-num">0</span>
+          <span class="ea-stat__label">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 8.5 6.5 12 13 4.5"/></svg>
+            <span id="ok-label"></span>
+          </span>
+        </div>
+        <div class="ea-stat ea-stat--fail">
+          <span class="ea-stat__num" id="fail-num">0</span>
+          <span class="ea-stat__label">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+            <span id="fail-label"></span>
+          </span>
+        </div>
+      </div>
+      <div class="ea-fail-details" id="done-moved" hidden></div>
+      <div class="ea-fail-details" id="fail-details"></div>
+      <button class="ea-btn ea-btn--primary ea-btn--lg" id="btn-rescan-done"></button>
+    </section>
+
+    <section data-view="cancelled">
+      <div>
+        <div class="ea-popup__title" id="cancelled-title"></div>
+        <p class="ea-popup__desc" id="cancelled-desc"></p>
+      </div>
+      <div class="ea-stats">
+        <div class="ea-stat ea-stat--ok">
+          <span class="ea-stat__num" id="cancelled-ok">0</span>
+          <span class="ea-stat__label" id="ok-label-2"></span>
+        </div>
+        <div class="ea-stat ea-stat--fail">
+          <span class="ea-stat__num" id="cancelled-fail">0</span>
+          <span class="ea-stat__label" id="fail-label-2"></span>
+        </div>
+      </div>
+      <button class="ea-btn ea-btn--primary ea-btn--lg" id="btn-rescan-cancelled"></button>
+    </section>
+
+    <section data-view="error">
+      <div class="ea-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true" style="color: var(--danger);">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M12 7.5v5M12 15.8v.2"/>
+        </svg>
+        <div class="ea-empty__title" id="error-title"></div>
+        <div class="ea-empty__desc" id="error-desc"></div>
+        <div style="display:flex; gap:8px;">
+          <button class="ea-btn ea-btn--primary" id="btn-retry"></button>
+          <button class="ea-btn ea-btn--secondary" id="btn-error-settings"></button>
+        </div>
+      </div>
+    </section>
+
+    <p class="ea-status" id="inline-status" aria-live="polite"></p>
+  </main>
+
+  <footer class="ea-popup__foot">
+    <div class="ea-popup__foot__left">
+      <span class="ea-foot-dot" id="foot-dot"></span>
+      <span id="foot-provider"></span>
+      <span class="ea-foot-model" id="foot-model"></span>
+      <span class="ea-badge ea-badge--neutral" id="foot-local" hidden></span>
+    </div>
+    <button class="ea-popup__foot__settings" id="btn-settings"></button>
+  </footer>
+
+  <script src="popup-bundle.js"></script>
+</body>
+</html>

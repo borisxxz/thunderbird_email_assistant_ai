@@ -1,0 +1,41 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build bundles
+        run: npx webpack
+
+      - name: Lint
+        run: npx web-ext lint --ignore-files "src/" "node_modules/" "package.json" "package-lock.json" "webpack.config.js" "build.bash" "doc/"
+
+      - name: Package zip
+        run: npx web-ext build --ignore-files "src/" "node_modules/" "package.json" "package-lock.json" "webpack.config.js" "build.bash" "doc/"
+
+      - name: Read version
+        id: ver
+        run: echo "version=$(node -p "require('./manifest.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.ver.outputs.version }}
+          files: web-ext-artifacts/*.zip
+          generate_release_notes: true

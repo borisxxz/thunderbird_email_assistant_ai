@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Email Assistant</title>
+  <link rel="stylesheet" type="text/css" href="styles/tokens.css">
+  <link rel="stylesheet" type="text/css" href="styles/base.css">
+  <link rel="stylesheet" type="text/css" href="styles/options.css">
+</head>
+<body class="ea-page ea-page--options">
+
+  <header class="ea-topbar">
+    <div class="ea-topbar__brand">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <rect x="1.5" y="3" width="13" height="10" rx="1.5"/>
+        <path d="M2 4.5 8 9l6-4.5"/>
+      </svg>
+      <span id="brand-title">Email Assistant</span>
+      <span class="ea-badge ea-badge--neutral">v2.1</span>
+    </div>
+    <div class="ea-seg" id="language-seg" role="radiogroup" aria-label="Language"></div>
+  </header>
+
+  <div class="ea-layout">
+    <nav class="ea-nav" role="tablist" aria-label="Settings sections" id="main-nav">
+      <button class="ea-nav__item" role="tab" id="nav-providers" aria-controls="panel-providers" aria-selected="true" data-nav="providers" tabindex="0"></button>
+      <button class="ea-nav__item" role="tab" id="nav-tags" aria-controls="panel-tags" aria-selected="false" data-nav="tags" tabindex="-1"></button>
+    </nav>
+
+    <!-- 提供商面板 -->
+    <section id="panel-providers" role="tabpanel" aria-labelledby="nav-providers" class="ea-panel-section is-active">
+      <div class="ea-card">
+        <h2 class="ea-card__title" id="providers-title"></h2>
+        <p class="ea-card__desc" id="providers-desc"></p>
+
+        <div class="ea-radio-grid" id="provider-grid" role="radiogroup" aria-label="Provider"></div>
+
+        <div class="ea-provider-panel" id="provider-panel"></div>
+      </div>
+    </section>
+
+    <!-- 标签面板 -->
+    <section id="panel-tags" role="tabpanel" aria-labelledby="nav-tags" class="ea-panel-section" hidden>
+      <div class="ea-card">
+        <div class="ea-tag-head">
+          <div>
+            <h2 class="ea-card__title" id="tags-title"></h2>
+            <p class="ea-card__desc" id="tags-desc"></p>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="ea-tag-head__meta" id="tag-count"></span>
+            <button class="ea-btn ea-btn--secondary" id="btn-import-tags"></button>
+            <button class="ea-btn ea-btn--secondary" id="btn-export-tags"></button>
+            <button class="ea-btn ea-btn--secondary" id="add-tag-btn"></button>
+            <input type="file" id="import-tags-file" accept=".json,application/json" hidden>
+          </div>
+        </div>
+        <div class="ea-tag-list" id="tag-list"></div>
+        <div id="tag-empty" hidden>
+          <div class="ea-empty">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+              <path d="M20.6 13.4 12 22l-8-8V4h10l6.6 6.6a2 2 0 0 1 0 2.8Z"/>
+              <circle cx="7.5" cy="8.5" r="1.2"/>
+            </svg>
+            <div class="ea-empty__title" id="tags-empty-title"></div>
+            <div class="ea-empty__desc" id="tags-empty-desc"></div>
+            <button class="ea-btn ea-btn--secondary" id="add-first-tag-btn"></button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 标签编辑弹窗 -->
+  <div class="ea-modal" id="tag-modal">
+    <div class="ea-modal__panel" role="dialog" aria-modal="true" aria-labelledby="tag-modal-title">
+      <div class="ea-modal__head">
+        <h2 id="tag-modal-title"></h2>
+        <button class="ea-icon-btn" id="tag-modal-close" aria-label="Close">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 3l10 10M13 3 3 13"/></svg>
+        </button>
+      </div>
+      <form class="ea-modal__body" id="tag-form" novalidate>
+        <div class="ea-form-row">
+          <label for="tag-name" id="tag-name-label"></label>
+          <input class="ea-input" type="text" id="tag-name">
+          <p class="ea-error" id="tag-name-error"></p>
+        </div>
+        <div class="ea-form-row">
+          <label for="tag-key" id="tag-key-label"></label>
+          <input class="ea-input ea-u-mono" type="text" id="tag-key">
+          <p class="ea-error" id="tag-key-error"></p>
+        </div>
+        <div class="ea-form-row">
+          <label id="tag-color-label"></label>
+          <div class="ea-color-field">
+            <span class="ea-color-swatch"><input type="color" id="tag-color" value="#3498DB" aria-labelledby="tag-color-label"></span>
+            <span class="ea-color-presets" id="tag-color-presets"></span>
+          </div>
+        </div>
+        <div class="ea-form-row">
+          <label for="tag-prompt" id="tag-prompt-label"></label>
+          <textarea class="ea-input" id="tag-prompt" rows="3"></textarea>
+          <p class="ea-error" id="tag-prompt-error"></p>
+          <p class="ea-help" id="tag-prompt-help"></p>
+        </div>
+        <div class="ea-form-row">
+          <label for="tag-folder" id="tag-folder-label"></label>
+          <select class="ea-input" id="tag-folder"></select>
+          <p class="ea-help" id="tag-folder-help"></p>
+        </div>
+      </form>
+      <div class="ea-modal__foot">
+        <button class="ea-btn ea-btn--secondary" id="tag-form-cancel"></button>
+        <button class="ea-btn ea-btn--primary" id="tag-form-save"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 删除确认弹窗 -->
+  <div class="ea-modal" id="confirm-modal">
+    <div class="ea-modal__panel" role="dialog" aria-modal="true" aria-labelledby="confirm-title" style="width:min(420px, calc(100vw - 48px))">
+      <div class="ea-modal__head">
+        <h2 id="confirm-title"></h2>
+        <button class="ea-icon-btn" id="confirm-close" aria-label="Close">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 3l10 10M13 3 3 13"/></svg>
+        </button>
+      </div>
+      <div class="ea-modal__body"><p class="ea-modal__confirm-text" id="confirm-text"></p></div>
+      <div class="ea-modal__foot">
+        <button class="ea-btn ea-btn--secondary" id="confirm-cancel"></button>
+        <button class="ea-btn ea-btn--danger" id="confirm-ok"></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="ea-toast-wrap" id="toast-wrap"></div>
+
+  <script src="options-bundle.js"></script>
+</body>
+</html>

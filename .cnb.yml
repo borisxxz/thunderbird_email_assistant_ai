@@ -1,0 +1,32 @@
+# CNB 云原生构建（https://cnb.cool）
+# main push：构建自检；tag push（v*）：打包并发布 Release（附件为 zip）
+main:
+  push:
+    - docker:
+        image: node:20
+      stages:
+        - name: install deps
+          script: npm ci
+        - name: build bundles
+          script: npx webpack
+        - name: lint
+          script: npx web-ext lint --ignore-files "src/" "node_modules/" "package.json" "package-lock.json" "webpack.config.js" "build.bash" "doc/"
+
+$:
+  tag_push:
+    - docker:
+        image: node:20
+      stages:
+        - name: install deps
+          script: npm ci
+        - name: build bundles
+          script: npx webpack
+        - name: create release
+          type: git:release
+        - name: package zip
+          script: npx web-ext build --ignore-files "src/" "node_modules/" "package.json" "package-lock.json" "webpack.config.js" "build.bash" "doc/"
+        - name: upload zip to release
+          image: cnbcool/attachments:latest
+          settings:
+            attachments:
+              - "web-ext-artifacts/*.zip"

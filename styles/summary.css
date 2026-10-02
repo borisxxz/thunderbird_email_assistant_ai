@@ -1,0 +1,91 @@
+/* ============================================================
+   AI 摘要窗（420×520）
+   ============================================================ */
+html, body { width: 420px; height: 520px; overflow: hidden; }
+body { display: flex; flex-direction: column; }
+
+.ea-sum__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  padding: 0 var(--space-3) 0 var(--space-5);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-1);
+  flex-shrink: 0;
+}
+.ea-sum__head h1 { font-size: var(--text-body); font-weight: var(--weight-semibold); }
+
+.ea-sum__meta {
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-1);
+  flex-shrink: 0;
+  user-select: none;
+}
+.ea-sum__subject {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.ea-sum__from {
+  margin-top: var(--space-2);
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.ea-sum__from .ea-sum__addr { font-family: var(--font-mono); color: var(--text-3); overflow: hidden; text-overflow: ellipsis; }
+.ea-sum__from .ea-sum__name { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; }
+
+.ea-sum__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.ea-sum__body [data-view] { display: none; }
+.ea-sum__body[data-phase="loading"] [data-view="loading"],
+.ea-sum__body[data-phase="success"] [data-view="success"],
+.ea-sum__body[data-phase="error"] [data-view="error"] { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.ea-sum__text p { font-size: var(--text-body); line-height: var(--leading-loose); color: var(--text-1); }
+.ea-sum__text p + p { margin-top: var(--space-3); }
+
+.ea-sum__tags-title { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-3); margin-top: var(--space-2); }
+.ea-sum__chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.ea-sum__chips .ea-chip__check { width: 12px; height: 12px; }
+
+.ea-sum__loading-hint { font-size: var(--text-sm); color: var(--text-3); }
+
+.ea-sum__error { text-align: center; }
+.ea-sum__error svg { width: 32px; height: 32px; color: var(--danger); margin: var(--space-4) auto var(--space-3); display: block; }
+.ea-sum__error-title { font-size: var(--text-body); font-weight: var(--weight-semibold); }
+.ea-sum__error-hint { font-size: var(--text-sm); color: var(--text-2); line-height: var(--leading-normal); margin-top: var(--space-1); }
+.ea-sum__error-actions { display: flex; justify-content: center; gap: var(--space-2); margin-top: var(--space-4); }
+
+.ea-sum__foot {
+  display: flex;
+  align-items: center;
+  height: 52px;
+  padding: 0 var(--space-5);
+  background: var(--surface);
+  border-top: 1px solid var(--border-1);
+  flex-shrink: 0;
+}
+.ea-sum__copy {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.ea-sum__copy svg { width: 16px; height: 16px; }
+.ea-sum__copy.is-copied { color: var(--success); border-color: transparent; background: var(--success-subtle); }

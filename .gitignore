@@ -1,0 +1,19 @@
+# node / build
+node_modules/
+package-lock.json.bak
+
+# build artifacts (get them from GitHub Releases instead)
+web-ext-artifacts/
+*-bundle.js
+*-bundle.js.map
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# editors
+.vscode/
+.idea/
+*.swp
+doc/offline/

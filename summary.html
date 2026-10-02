@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>AI Summary</title>
+  <link rel="stylesheet" type="text/css" href="styles/tokens.css">
+  <link rel="stylesheet" type="text/css" href="styles/base.css">
+  <link rel="stylesheet" type="text/css" href="styles/summary.css">
+</head>
+<body class="ea-page">
+
+  <header class="ea-sum__head">
+    <h1 id="sum-title">AI Summary</h1>
+    <button class="ea-icon-btn" id="sum-close" aria-label="Close">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 3l10 10M13 3 3 13"/></svg>
+    </button>
+  </header>
+
+  <div class="ea-sum__meta">
+    <div class="ea-sum__subject" id="sum-subject"></div>
+    <div class="ea-sum__from">
+      <span id="sum-from-label"></span>
+      <span class="ea-sum__name" id="sum-from-name"></span>
+      <span class="ea-sum__addr" id="sum-from-addr"></span>
+    </div>
+  </div>
+
+  <main class="ea-sum__body" id="sum-body" data-phase="loading">
+
+    <section data-view="loading">
+      <div class="ea-skeleton">
+        <div class="ea-skeleton__line"></div>
+        <div class="ea-skeleton__line"></div>
+        <div class="ea-skeleton__line"></div>
+        <div class="ea-skeleton__line"></div>
+      </div>
+      <p class="ea-sum__loading-hint" id="sum-loading-hint"></p>
+    </section>
+
+    <section data-view="success">
+      <div class="ea-sum__text" id="sum-text"></div>
+      <div id="sum-tags-block" hidden>
+        <div class="ea-sum__tags-title" id="sum-tags-title"></div>
+        <div class="ea-sum__chips" id="sum-chips" role="list"></div>
+      </div>
+    </section>
+
+    <section data-view="error">
+      <div class="ea-sum__error">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M12 7.5v5M12 15.8v.2"/>
+        </svg>
+        <div class="ea-sum__error-title" id="sum-error-title"></div>
+        <div class="ea-sum__error-hint" id="sum-error-hint"></div>
+        <div class="ea-sum__error-actions">
+          <button class="ea-btn ea-btn--primary ea-btn--lg" id="sum-retry"></button>
+          <button class="ea-btn ea-btn--secondary ea-btn--lg" id="sum-settings"></button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="ea-sum__foot">
+    <button class="ea-btn ea-btn--secondary ea-sum__copy" id="sum-copy">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+        <rect x="5" y="5" width="9" height="9" rx="1.5"/>
+        <path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2H3.5A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/>
+      </svg>
+      <span id="sum-copy-label"></span>
+    </button>
+  </footer>
+
+  <script src="summary-bundle.js"></script>
+</body>
+</html>
