@@ -34,19 +34,20 @@ jobs:
         run: echo "version=$(node -p "require('./manifest.json').version")" >> "$GITHUB_OUTPUT"
 
       - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ steps.ver.outputs.version }}
           files: web-ext-artifacts/*.zip
           generate_release_notes: true
 
-  # Mirror code + tags to CNB; its tag_push pipeline then builds and publishes
-  # the CNB release (faster downloads in China). Requires the CNB_TOKEN secret;
-  # skipped automatically when the secret is not configured yet.
+  # Mirror code + tags to CNB; its tag_push pipeline then publishes the CNB
+  # release. Requires the CNB_TOKEN secret; skipped while unconfigured.
+  # NOTE: `secrets` is not allowed in `if` expressions on this GitHub
+  # instance; check the env-injected token instead.
   sync-cnb:
     needs: build
     runs-on: ubuntu-latest
-    if: ${{ secrets.CNB_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,6 +56,7 @@ jobs:
       - name: Push to CNB mirror
         env:
           CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
+        if: ${{ env.CNB_TOKEN != '' }}
         run: |
-          git remote add cnb "https://boris007:${CNB_TOKEN}@cnb.cool/boris007/thunderbird_email_assistant_ai.git"
+          git remote add cnb "https://boris007:__CNB_TOKEN__@cnb.cool/boris007/thunderbird_email_assistant_ai.git"
           git push cnb main --tags
