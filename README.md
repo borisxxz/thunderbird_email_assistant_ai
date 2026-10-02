@@ -55,19 +55,32 @@
 3. 需要归档：在"自定义标签"里给标签设置目标文件夹（默认自动同名文件夹）
 4. 邮件列表选中多封 → 工具栏按钮 → 选动作模式 → 开始 AI 打标 → 确认 → 应用
 
-## 构建
+## 构建与发布
 
-推 tag（`v*`）即自动打包发布 Release，双平台流水线：
+### 首次配置（一次性）
 
-- **GitHub Actions**：`.github/workflows/release.yml`
-- **CNB 云原生构建**：`.cnb.yml`（`git:release` + 附件上传，国内镜像下载加速）
+1. 创建 CNB 访问令牌：[cnb.cool](https://cnb.cool) → 头像 → 设置 → **个人访问令牌** → 新建（勾选仓库写权限）
+2. 添加到 GitHub 仓库密钥：仓库 **Settings → Secrets and variables → Actions → New repository secret**，Name 填 `CNB_TOKEN`，Value 填令牌
 
-本地构建：
+### 日常发布（只需推一个 tag）
 
 ```bash
-npm install
-npm run build   # webpack + web-ext build → web-ext-artifacts/
+# 1. 同步修改 manifest.json 与 package.json 的 version（例如 0.0.2）
+git add -A && git commit -m "release 0.0.2"
+
+# 2. 打 tag 并推送
+git tag v0.0.2
+git push github main v0.0.2
 ```
+
+推送 tag 后自动完成（无需其他操作）：
+
+1. **GitHub Actions** 构建 → GitHub Release（zip 附件）
+2. 自动镜像代码与 tag 到 **CNB** → CNB `tag_push` 流水线构建 → CNB Release（zip 附件）
+
+> 国内网络推送 GitHub 失败时加代理：`git -c http.proxy=http://127.0.0.1:7897 push github main v0.0.2`
+>
+> 手动本地构建：`npm run build` → `web-ext-artifacts/`
 
 ## 开发
 

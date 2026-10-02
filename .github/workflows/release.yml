@@ -39,3 +39,22 @@ jobs:
           name: ${{ steps.ver.outputs.version }}
           files: web-ext-artifacts/*.zip
           generate_release_notes: true
+
+  # Mirror code + tags to CNB; its tag_push pipeline then builds and publishes
+  # the CNB release (faster downloads in China). Requires the CNB_TOKEN secret;
+  # skipped automatically when the secret is not configured yet.
+  sync-cnb:
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ secrets.CNB_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to CNB mirror
+        env:
+          CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
+        run: |
+          git remote add cnb "https://boris007:${CNB_TOKEN}@cnb.cool/boris007/thunderbird_email_assistant_ai.git"
+          git push cnb main --tags

@@ -53,19 +53,32 @@ Batch processing supports three action modes: **tag only / tag + move / move onl
 3. For filing: bind target folders to your tags in "Custom Tags" (auto folder by default)
 4. Select messages in the list → toolbar button → choose the action mode → Start → Confirm → Apply
 
-## Building
+## Build & Release
 
-Pushing a `v*` tag triggers both pipelines automatically:
+### One-time setup
 
-- **GitHub Actions**: `.github/workflows/release.yml`
-- **CNB**: `.cnb.yml` (`git:release` + attachment upload — faster downloads in China)
+1. Create a CNB access token: [cnb.cool](https://cnb.cool) → avatar → Settings → **Personal access tokens** → new token (repo write access)
+2. Add it to GitHub secrets: repo **Settings → Secrets and variables → Actions → New repository secret**, name `CNB_TOKEN`, value = the token
 
-Local build:
+### Routine release (just push a tag)
 
 ```bash
-npm install
-npm run build   # webpack + web-ext build → web-ext-artifacts/
+# 1. Bump "version" in manifest.json AND package.json (e.g. 0.0.2)
+git add -A && git commit -m "release 0.0.2"
+
+# 2. Tag and push
+git tag v0.0.2
+git push github main v0.0.2
 ```
+
+Pushing the tag then does everything automatically:
+
+1. **GitHub Actions** builds → GitHub Release (zip asset)
+2. Code + tag are mirrored to **CNB** → CNB `tag_push` pipeline builds → CNB Release (zip asset)
+
+> Behind a firewall? `git -c http.proxy=http://127.0.0.1:7897 push github main v0.0.2`
+>
+> Local build: `npm run build` → `web-ext-artifacts/`
 
 ## Development
 
