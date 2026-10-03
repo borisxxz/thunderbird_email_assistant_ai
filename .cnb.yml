@@ -1,32 +1,30 @@
 # CNB 云原生构建（https://cnb.cool）
-# main push：构建自检；tag push（v*）：打包并发布 Release（附件为 zip）
+# main push：构建自检；tag push（v*）：打包并发布 Release（CNB 风味安装包，更新源指向本仓库 raw 清单）
 main:
   push:
     - docker:
         image: node:20
       stages:
-        - name: install deps
-          script: npm ci
-        - name: build bundles
-          script: npx webpack
-        - name: lint
-          script: npx web-ext lint --ignore-files "src/" "node_modules/" "package.json" "package-lock.json" "webpack.config.js" "build.bash" "doc/"
+        - name: package check
+          script: npx --yes web-ext@8 build --ignore-files "src/" "node_modules/" "package.json" "package-lock.json" "webpack.config.js" "build.bash" "doc/"
 
 $:
   tag_push:
     - docker:
         image: node:20
       stages:
-        - name: install deps
-          script: npm ci
-        - name: build bundles
-          script: npx webpack
         - name: create release
           type: git:release
-        - name: package zip
-          script: npx web-ext build --ignore-files "src/" "node_modules/" "package.json" "package-lock.json" "webpack.config.js" "build.bash" "doc/"
+        - name: package cnb-flavored zip
+          script: |
+            sed -i 's|https://github.com/borisxxz/thunderbird_email_assistant_ai/releases/latest/download/updates.json|https://cnb.cool/boris007/thunderbird_email_assistant_ai/-/git/raw/main/updates-cnb.json|' manifest.json
+            npx --yes web-ext@8 build --ignore-files "src/" "node_modules/" "package.json" "package-lock.json" "webpack.config.js" "build.bash" "doc/"
+            VER=$(node -p "require('./manifest.json').version")
+            cd web-ext-artifacts
+            cp "email_assistant-${VER}.zip" "email_assistant-${VER}-cnb.xpi"
         - name: upload zip to release
           image: cnbcool/attachments:latest
           settings:
             attachments:
+              - "web-ext-artifacts/*.xpi"
               - "web-ext-artifacts/*.zip"

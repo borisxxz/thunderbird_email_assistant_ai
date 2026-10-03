@@ -34,25 +34,63 @@ jobs:
         id: ver
         run: echo "version=$(node -p "require('./manifest.json').version")" >> "$GITHUB_OUTPUT"
 
-
+      # Two update flavors: the GitHub flavor checks for updates on GitHub
+      # Releases; the CNB flavor reads the raw manifest file on cnb.cool and
+      # downloads updates from the CNB release mirror (fast in China).
       - name: Stage update assets
         run: |
           cd web-ext-artifacts
+          VER="${{ steps.ver.outputs.version }}"
+          TAG="${GITHUB_REF_NAME}"
+          REPO="borisxxz/thunderbird_email_assistant_ai"
+          CNB_REPO="boris007/thunderbird_email_assistant_ai"
+          ID=$(node -p "require('../manifest.json').browser_specific_settings.gecko.id")
           ZIP=$(ls *.zip)
-          cp "$ZIP" "${ZIP%.zip}.xpi"
-          node - <<'NODE'
-          const fs = require('fs');
-          const ver = require('../manifest.json').version;
-          const id = require('../manifest.json').browser_specific_settings.gecko.id;
-          const repo = process.env.GITHUB_REPOSITORY;
-          const tag = process.env.GITHUB_REF_NAME;
-          const zipName = fs.readdirSync('.').find(f => f.endsWith('.zip'));
-          const xpiName = zipName.replace(/[.]zip$/, '.xpi');
-          const json = { addons: {} };
-          json.addons[id] = { updates: [{ version: ver, update_link: 'https://github.com/' + repo + '/releases/download/' + tag + '/' + xpiName }] };
-          fs.writeFileSync('updates.json', JSON.stringify(json, null, 2));
-          console.log(fs.readFileSync('updates.json', 'utf8'));
-          NODE
+
+          cp "$ZIP" "email_assistant-${VER}-github.xpi"
+
+          sed -i "s|https://github.com/${REPO}/releases/latest/download/updates.json|https://cnb.cool/${CNB_REPO}/-/git/raw/main/updates-cnb.json|" ../manifest.json
+          npx web-ext build --overwrite-dest --ignore-files "src/" "node_modules/" "package.json" "package-lock.json" "webpack.config.js" "build.bash" "doc/"
+          cp "$ZIP" "email_assistant-${VER}-cnb.xpi"
+
+          cat > updates.json <<EOF
+          {
+            "addons": {
+              "${ID}": {
+                "updates": [
+                  {
+                    "version": "${VER}",
+                    "update_link": "https://github.com/${REPO}/releases/download/${TAG}/email_assistant-${VER}-github.xpi"
+                  }
+                ]
+              }
+            }
+          }
+          EOF
+          cd ..
+          cat > updates-cnb.json <<EOF
+          {
+            "addons": {
+              "${ID}": {
+                "updates": [
+                  {
+                    "version": "${VER}",
+                    "update_link": "https://cnb.cool/${CNB_REPO}/-/releases/download/${TAG}/email_assistant-${VER}-cnb.xpi"
+                  }
+                ]
+              }
+            }
+          }
+          EOF
+          git checkout -- manifest.json
+
+      - name: Publish CNB update manifest
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add updates-cnb.json
+          git commit -m "chore: update CNB update manifest for ${GITHUB_REF_NAME}"
+          git push origin HEAD:main
 
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -61,14 +99,13 @@ jobs:
           name: ${{ steps.ver.outputs.version }}
           files: |
             web-ext-artifacts/*.zip
-            web-ext-artifacts/*.xpi
+            web-ext-artifacts/*-github.xpi
+            web-ext-artifacts/*-cnb.xpi
             web-ext-artifacts/updates.json
           generate_release_notes: true
 
   # Mirror code + tags to CNB; its tag_push pipeline then publishes the CNB
   # release. Requires the CNB_TOKEN secret; skipped while unconfigured.
-  # NOTE: `secrets` is not allowed in `if` expressions on this GitHub
-  # instance; check the env-injected token instead.
   sync-cnb:
     needs: build
     runs-on: ubuntu-latest
@@ -82,5 +119,6 @@ jobs:
           CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
         if: ${{ env.CNB_TOKEN != '' }}
         run: |
+          git checkout main   # include the freshly committed CNB update manifest
           git remote add cnb "https://cnb:${CNB_TOKEN}@cnb.cool/boris007/thunderbird_email_assistant_ai.git"
-          git push cnb HEAD:main --tags --force
+          git push cnb main --tags --force

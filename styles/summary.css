@@ -89,3 +89,24 @@ body { display: flex; flex-direction: column; }
 }
 .ea-sum__copy svg { width: 16px; height: 16px; }
 .ea-sum__copy.is-copied { color: var(--success); border-color: transparent; background: var(--success-subtle); }
+
+/* ---------- 翻译 ---------- */
+.ea-sum__translate-btn {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  align-self: flex-start;
+}
+.ea-sum__translate-btn:hover { background: var(--surface-hover); }
+.ea-sum__translate-btn:disabled { opacity: 0.5; cursor: wait; }
+.ea-sum__translation {
+  border-left: 3px solid var(--accent);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-2);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+.ea-sum__translation p { font-size: var(--text-sm); line-height: var(--leading-normal); margin: 0; white-space: pre-wrap; }

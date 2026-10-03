@@ -1,4 +1,5 @@
 import { DEFAULTS } from '../core/config.js';
+import { ensureTagsExist } from '../core/tags.js';
 import { findEmailParts } from '../core/analysis.js';
 import { buildSummaryPrompt } from '../core/summary.js';
 import { PROVIDER_ENGINES } from '../providers/index.js';
@@ -11,6 +12,8 @@ const messageId = new URLSearchParams(location.search).get('id');
 let summaryText = '';
 let analysis = null;
 let customTags = [];
+let emailBody = '';
+let cachedSettings = null;
 
 function applyTexts() {
   document.documentElement.lang = currentLang === 'zh-CN' ? 'zh-CN' : 'en';
@@ -24,6 +27,7 @@ function applyTexts() {
   $('sum-settings').textContent = t('openSettings');
   $('sum-tags-title').textContent = t('suggestedTags');
   $('sum-copy-label').textContent = t('copySummary');
+  $('sum-translate').textContent = t('translateBtn');
   $('sum-close').setAttribute('aria-label', t('close'));
 }
 
@@ -70,15 +74,29 @@ function renderChips() {
       const check = icons.check();
       check.classList.add('ea-chip__check');
       chip.appendChild(check);
+      const rollback = (why) => {
+        console.error('Email Assistant: failed to apply tag:', why);
+        chip.classList.remove('is-applied');
+        chip.querySelectorAll('.ea-chip__check').forEach(n => n.remove());
+      };
       try {
+        let { tagKeys: keyMap } = await messenger.storage.local.get({ tagKeys: {} });
+        let realKey = keyMap[tag.key];
+        if (!realKey) {
+          // Mapping may be stale (upgrade or manual tag changes) — rebuild it.
+          await ensureTagsExist();
+          ({ tagKeys: keyMap } = await messenger.storage.local.get({ tagKeys: {} }));
+          realKey = keyMap[tag.key] || tag.key;
+        }
         const details = await messenger.messages.get(Number(messageId));
         const tags = new Set(details.tags || []);
-        const { tagKeys: keyMap } = await messenger.storage.local.get({ tagKeys: {} });
-        tags.add(keyMap[tag.key] || tag.key);
+        tags.add(realKey);
         await messenger.messages.update(Number(messageId), { tags: Array.from(tags) });
+        // Verify: Thunderbird silently drops unknown tag keys on update.
+        const after = await messenger.messages.get(Number(messageId));
+        if (!(after.tags || []).includes(realKey)) throw new Error(`tag "${realKey}" was not applied`);
       } catch (err) {
-        console.error('Email Assistant: failed to apply tag:', err);
-        chip.classList.remove('is-applied');
+        rollback(err);
       }
     });
     wrap.appendChild(chip);
@@ -95,7 +113,39 @@ function renderSuccess() {
     wrap.appendChild(p);
   }
   renderChips();
+  $('sum-translate-block').hidden = false;
   setPhase('success');
+}
+
+async function doTranslate() {
+  if (!emailBody || !cachedSettings) return;
+  const btn = $('sum-translate');
+  const box = $('sum-translation');
+  const text = $('sum-translation-text');
+  box.hidden = false;
+  text.textContent = t('translating');
+  btn.disabled = true;
+  try {
+    const engine = PROVIDER_ENGINES[cachedSettings.provider];
+    const langName = currentLang === 'zh-CN' ? 'Simplified Chinese (简体中文)' : 'English';
+    const prompt = [
+      `Translate the following email into ${langName}.`,
+      'Output ONLY the translation itself — no summary, no commentary, no quotes.',
+      'Preserve paragraph breaks.',
+      '',
+      '--- EMAIL START ---',
+      emailBody,
+      '--- EMAIL END ---'
+    ].join('\n');
+    const result = await withTimeout(engine.summarize(cachedSettings, prompt), 120000);
+    if (!result) throw new Error('empty translation');
+    text.textContent = result;
+  } catch (err) {
+    console.error('Email Assistant: translation failed:', err);
+    text.textContent = t('translateFailed');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function withTimeout(promise, ms) {
@@ -118,6 +168,8 @@ async function runSummary() {
     const full = await messenger.messages.getFull(Number(messageId));
     const { body, attachments } = findEmailParts(full.parts);
     const structured = { headers: full.headers, body, attachments };
+    emailBody = body;
+    cachedSettings = settings;
 
     const langName = currentLang === 'zh-CN' ? 'Chinese (中文)' : 'English';
     const prompt = buildSummaryPrompt(full.headers, body, attachments, langName);
@@ -157,6 +209,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 $('sum-retry').addEventListener('click', runSummary);
+$('sum-translate').addEventListener('click', doTranslate);
 $('sum-settings').addEventListener('click', () => messenger.runtime.openOptionsPage());
 $('sum-close').addEventListener('click', () => window.close());
 
@@ -169,6 +222,7 @@ $('sum-copy').addEventListener('click', async () => {
     setTimeout(() => {
       $('sum-copy').classList.remove('is-copied');
       $('sum-copy-label').textContent = t('copySummary');
+  $('sum-translate').textContent = t('translateBtn');
     }, 1500);
   } catch (err) {
     console.error('Clipboard write failed:', err);

@@ -106,6 +106,9 @@ export const MESSAGES = {
     summaryErrorHint: 'Check your provider settings and connection.',
     suggestedTags: 'Suggested tags',
     copySummary: 'Copy summary',
+    translateBtn: 'Translate this email',
+    translating: 'Translating…',
+    translateFailed: 'Translation failed — check your provider settings and retry.',
     copied: 'Copied!',
     from: 'From',
 
@@ -254,6 +257,9 @@ export const MESSAGES = {
     summaryErrorHint: '请检查提供商设置与连接。',
     suggestedTags: '建议标签',
     copySummary: '复制摘要',
+    translateBtn: '翻译这封邮件',
+    translating: '正在翻译…',
+    translateFailed: '翻译失败——请检查提供商设置后重试。',
     copied: '已复制！',
     from: '发件人',
 
