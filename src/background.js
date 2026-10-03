@@ -303,6 +303,29 @@ async function applyReview(items) {
   const doMove = batchAction !== 'tag';
   const { noTagFailures = {} } = await messenger.storage.local.get({ noTagFailures: {} });
   const { noTagAccounts = [] } = await messenger.storage.local.get({ noTagAccounts: [] });
+
+  // Built-in known-bad servers: QQ/Tencent mail and Gmail accept keyword
+  // STOREs but silently drop them, so tags vanish within seconds
+  // (bugzilla.mozilla.org/1516177). Skip tagging for them up front and
+  // archive by moving instead, with a clear reason shown to the user.
+  const NO_TAG_DOMAINS = [
+    { suffix: 'qq.com', reasonKey: 'skipReasonQQ' },
+    { suffix: 'vip.qq.com', reasonKey: 'skipReasonQQ' },
+    { suffix: 'foxmail.com', reasonKey: 'skipReasonQQ' },
+    { suffix: 'gmail.com', reasonKey: 'skipReasonGmail' },
+    { suffix: 'googlemail.com', reasonKey: 'skipReasonGmail' }
+  ];
+  const accountEmail = {};
+  const builtinNoTag = {};
+  try {
+    for (const a of await messenger.accounts.list(false)) {
+      const email = ((a.identities && a.identities[0] && a.identities[0].email) || a.name || '').toLowerCase();
+      accountEmail[a.id] = email;
+      const hit = NO_TAG_DOMAINS.find(d => email.endsWith('@' + d.suffix));
+      if (hit) builtinNoTag[a.id] = hit.reasonKey;
+    }
+  } catch { /* detection is best-effort */ }
+  const announcedSkip = new Set();
   const { tagKeys: failKeyMap } = await messenger.storage.local.get({ tagKeys: {} });
   const FAIL_TAG = failKeyMap[FAILED_TAG.key] || FAILED_TAG.key;
   const MAX_ATTEMPTS = Math.min(10, Math.max(1, Number(maxAttempts) || DEFAULTS.maxAttempts));
@@ -336,11 +359,14 @@ async function applyReview(items) {
       const details0 = await withTimeout(messenger.messages.get(item.id), IMAP_TIMEOUT, "Tag read");
       const account = details0.accountId || (details0.folder && details0.folder.accountId);
       if (account) item.accountId = account;
-      if (account && noTagAccounts.includes(account)) {
-        batch.skippedNotes.push(`#${item.idx} ${item.subject || ''} · ${t('tagUnsupportedNote')}`);
+      const builtinReason = account && builtinNoTag[account];
+      const learnedSkip = account && noTagAccounts.includes(account);
+      if (builtinReason || learnedSkip) {
+        // Tagging is skipped, but the move/archive below still runs.
+        // The reason is shown for every skipped message.
+        batch.skippedNotes.push(`#${item.idx} ${item.subject || ''} · ${accountEmail[account] || account} · ${t(builtinReason || 'tagUnsupportedNote')}`);
         batch.lastSubject = t('tagSkippedLine', { subject: item.subject || '' });
-        return; // move may still run below? no — return skips it too; fall through instead
-      }
+      } else {
       await sleep(IMAP_DELAY);
       const details = details0;
       const merged = new Set([...(details.tags || []), ...item.tags]);
@@ -369,6 +395,7 @@ async function applyReview(items) {
       }
       item.tagApplied = true; // retries must not tag again — the move loop owns them now
       await sleep(IMAP_DELAY);
+      }
     }
     if (doMove) {
       const target = moveTargetFor(item, batch.catalog);

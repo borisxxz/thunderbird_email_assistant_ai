@@ -142,6 +142,11 @@ export const MESSAGES = {
     noTags: 'No tags',
     addTagShort: 'Add',
     applyingLabel: 'Applying',
+    retryingLabel: 'Retrying (round {attempt}) — {total} left',
+    tagSkippedLine: '[tagging skipped] {subject}',
+    skipReasonQQ: 'The QQ mail server does not persist custom tags (a confirmed platform limitation) — archiving by move instead',
+    skipReasonGmail: 'Gmail IMAP does not persist custom tags — archiving by move instead',
+    tagUnsupportedNote: 'This server does not keep custom tags — tagging auto-skipped for this account from now on',
     movedStat: 'Moved {count} message(s) to folders',
 
     // Advanced settings
@@ -297,6 +302,10 @@ export const MESSAGES = {
     noTags: '无标签',
     addTagShort: '添加',
     applyingLabel: '正在应用',
+    retryingLabel: '重试中（第 {attempt} 轮）— 剩 {total} 封',
+    tagSkippedLine: '【已跳过打标】{subject}',
+    skipReasonQQ: 'QQ 邮箱服务器不保存自定义标签（官方确认的平台限制），已自动改为移动归档',
+    skipReasonGmail: 'Gmail 的 IMAP 不保存自定义标签，已自动改为移动归档',
     movedStat: '已移动 {count} 封邮件到文件夹',
 
     // 高级设置

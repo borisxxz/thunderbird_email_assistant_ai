@@ -626,12 +626,19 @@ async function copyDiagnosis() {
   const manifest = messenger.runtime.getManifest();
   const { tagKeys } = await messenger.storage.local.get({ tagKeys: {} });
   const tbTags = await messenger.messages.tags.list();
+  let accountEmails = [];
+  try {
+    accountEmails = (await messenger.accounts.list(false)).map(a => ({
+      email: (a.identities && a.identities[0] && a.identities[0].email) || a.name || a.id
+    }));
+  } catch { /* ignore */ }
   const { noTagAccounts = [] } = await messenger.storage.local.get({ noTagAccounts: [] });
   const { noTagFailures = {} } = await messenger.storage.local.get({ noTagFailures: {} });
   const { lastBatch = null } = await messenger.storage.local.get({ lastBatch: null });
   const lines = [
     '[Email Assistant tag diagnosis]',
-    `accounts with tagging auto-skipped: ${noTagAccounts.length ? noTagAccounts.join(', ') : '(none)'}`,
+    `accounts with tagging auto-skipped (learned): ${noTagAccounts.length ? noTagAccounts.join(', ') : '(none)'}`,
+    'accounts with tagging pre-skipped (built-in QQ/Gmail detection): see their e-mail addresses above',
     `tag write failure counts: ${Object.keys(noTagFailures).length ? Object.entries(noTagFailures).map(([k, v]) => k + ':' + v).join(' ') : '(none)'}`,
     ...(lastBatch ? [
       `last batch: ${lastBatch.phase}, ok=${lastBatch.ok} fail=${lastBatch.fail} moved=${lastBatch.moved}`,
@@ -646,6 +653,9 @@ async function copyDiagnosis() {
     '',
     'stored key map (def key -> real key):',
     ...Object.entries(tagKeys).map(([k, v]) => `  ${k} -> ${v}`),
+    '',
+    'accounts:',
+    ...accountEmails.map(x => `  ${x.email}`),
     '',
     'Thunderbird tag list:',
     ...tbTags.map(x => `  key=${x.key}  name=${x.tag}`),
