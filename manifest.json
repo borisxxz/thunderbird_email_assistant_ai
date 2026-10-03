@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Email Assistant",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "description": "Automatically tags messages based on AI rules, with configurable LLM providers, custom ports and models, batch tagging and AI summaries",
   "default_locale": "en",
   "icons": {
@@ -33,7 +33,6 @@
   },
   "browser_action": {
     "default_title": "__MSG_actionTitle__",
-    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",

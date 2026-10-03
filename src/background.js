@@ -15,6 +15,31 @@ function notifyBasic(text) {
   });
 }
 
+// Toolbar button opens the batch panel as a standalone window: it stays
+// visible when the user switches apps (popups auto-dismiss on click-away).
+let batchWindowId = null;
+
+messenger.browserAction.onClicked.addListener(async () => {
+  if (batchWindowId !== null) {
+    try {
+      await messenger.windows.update(batchWindowId, { focused: true });
+      return;
+    } catch {
+      batchWindowId = null;
+    }
+  }
+  const win = await messenger.windows.create({
+    type: 'popup',
+    url: messenger.runtime.getURL('popup.html'),
+    width: 420, height: 640
+  });
+  batchWindowId = win.id;
+});
+
+messenger.windows.onRemoved.addListener((windowId) => {
+  if (windowId === batchWindowId) batchWindowId = null;
+});
+
 // Button in the message display toolbar: summarize the currently displayed message.
 messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
   try {
