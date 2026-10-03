@@ -78,6 +78,7 @@ function applyStaticTexts() {
   $('confirm-ok').textContent = t('delete');
   $('btn-import-tags').textContent = t('importTags');
   $('btn-export-tags').textContent = t('exportTags');
+  $('btn-diagnose').textContent = t('diagnoseTags');
 }
 
 // ---------- 语言切换 ----------
@@ -619,6 +620,43 @@ async function persistTags() {
   ensureTagsExist();
 }
 
+// ---------- 诊断导出 ----------
+async function copyDiagnosis() {
+  const manifest = messenger.runtime.getManifest();
+  const { tagKeys } = await messenger.storage.local.get({ tagKeys: {} });
+  const tbTags = await messenger.messages.tags.list();
+  const lines = [
+    '[Email Assistant tag diagnosis]',
+    `version: ${manifest.version}`,
+    `language: ${currentLang}`,
+    '',
+    'custom tag definitions:',
+    ...customTags.map(x => `  def key=${x.key}  name=${x.name}`),
+    '',
+    'stored key map (def key -> real key):',
+    ...Object.entries(tagKeys).map(([k, v]) => `  ${k} -> ${v}`),
+    '',
+    'Thunderbird tag list:',
+    ...tbTags.map(x => `  key=${x.key}  name=${x.tag}`),
+    '',
+    'mapped keys missing from Thunderbird:',
+    ...Object.entries(tagKeys)
+      .filter(([, v]) => !tbTags.some(x => x.key === v))
+      .map(([k, v]) => `  def ${k} -> ${v} (MISSING)`),
+    '',
+    'unmapped custom tags:',
+    ...customTags
+      .filter(x => !tagKeys[x.key])
+      .map(x => `  def ${x.key} (no mapping, would write raw key)`),
+  ];
+  try {
+    await navigator.clipboard.writeText(lines.join('\n'));
+    showToast('success', t('diagnoseCopied'));
+  } catch (err) {
+    showToast('danger', t('diagnoseFailed', { message: err.message || err }), true);
+  }
+}
+
 // ---------- 标签导入 / 导出 ----------
 function exportTags() {
   if (!customTags.length) {
@@ -724,6 +762,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('add-tag-btn').addEventListener('click', () => openTagModal(-1));
   $('add-first-tag-btn').addEventListener('click', () => openTagModal(-1));
   $('btn-export-tags').addEventListener('click', exportTags);
+  $('btn-diagnose').addEventListener('click', copyDiagnosis);
   $('btn-import-tags').addEventListener('click', () => $('import-tags-file').click());
   $('import-tags-file').addEventListener('change', async (e) => {
     const file = e.target.files && e.target.files[0];
