@@ -303,10 +303,10 @@ function renderProviderPanel() {
     id: 'field-concurrency', type: 'number', value: settings.concurrency, min: 1, max: 8, step: 1
   });
   addAdvField(t('advTemperature'), t('advTemperatureHelp'), {
-    id: 'field-temperature', type: 'number', value: settings.temperature ?? '', min: 0, max: 2, step: 0.1, placeholder: 'default'
+    id: 'field-temperature', type: 'number', value: settings.temperature ?? '', min: 0, max: 2, step: 0.1, placeholder: t('placeholderDefault')
   });
   addAdvField(t('advMaxTokens'), t('advMaxTokensHelp'), {
-    id: 'field-maxtokens', type: 'number', value: settings.maxTokens ?? '', min: 1, step: 1, placeholder: 'default'
+    id: 'field-maxtokens', type: 'number', value: settings.maxTokens ?? '', min: 1, step: 1, placeholder: t('placeholderDefault')
   });
   addAdvField(t('advMaxAttempts'), t('advMaxAttemptsHelp'), {
     id: 'field-maxattempts', type: 'number', value: settings.maxAttempts, min: 1, max: 10, step: 1

@@ -63,12 +63,13 @@ function batchStatus() {
 }
 
 async function tagCatalog() {
+  await getLanguage();
   const { customTags, tagKeys: keyMap } = await messenger.storage.local.get({
     customTags: DEFAULTS.customTags,
     tagKeys: {}
   });
   const catalog = {};
-  catalog[keyMap[FAILED_TAG.key] || FAILED_TAG.key] = { name: FAILED_TAG.name, color: FAILED_TAG.color, moveNone: true };
+  catalog[keyMap[FAILED_TAG.key] || FAILED_TAG.key] = { name: t('failedTagName'), color: FAILED_TAG.color, moveNone: true };
   for (const tag of customTags) {
     const entry = { name: tag.name, color: tag.color };
     const folder = tag.folder || 'auto'; // legacy '' behaves like auto

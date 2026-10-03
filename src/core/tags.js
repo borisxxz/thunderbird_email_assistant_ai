@@ -1,4 +1,5 @@
 import { DEFAULTS, FAILED_TAG, RETIRED_TAG_KEYS } from "./config.js";
+import { getLanguage, t } from "./i18n.js";
 
 // Resolves each tag definition to a real Thunderbird tag key:
 //  1. an existing tag with the exact same name is reused (manual tags included),
@@ -14,11 +15,13 @@ export async function ensureTagsExist() {
     return;
   }
 
+  await getLanguage();
   const { customTags, tagKeys: oldMap } = await messenger.storage.local.get({
     customTags: DEFAULTS.customTags,
     tagKeys: {}
   });
-  const tagDefs = [...customTags, FAILED_TAG];
+  // The failed-marker tag is named in the current UI language.
+  const tagDefs = [...customTags, { ...FAILED_TAG, name: t('failedTagName') }];
   const keyMap = {};
   const legacyPrefix = "_ma_";
 
@@ -31,6 +34,22 @@ export async function ensureTagsExist() {
         existing.tag === tagDef.name && !existing.key.startsWith(legacyPrefix));
       if (sameName) {
         keyMap[tagDef.key] = sameName.key;
+        continue;
+      }
+      // Exact key+name match: reuse as-is.
+      const byKey = allTags.find(existing => existing.key === tagDef.key && existing.tag === tagDef.name);
+      if (byKey) {
+        keyMap[tagDef.key] = tagDef.key;
+        continue;
+      }
+      // The failed tag's own label follows the UI language; rename legacy
+      // variants of it. Never touch tags the user created under the same key.
+      const keyOwner = allTags.find(existing => existing.key === tagDef.key);
+      if (keyOwner && tagDef.key === FAILED_TAG.key &&
+          /处理失败|Processing Failed/.test(keyOwner.tag) && messenger.messages.tags.update) {
+        await messenger.messages.tags.update(tagDef.key, { tag: tagDef.name, color: tagDef.color });
+        keyOwner.tag = tagDef.name;
+        keyMap[tagDef.key] = tagDef.key;
         continue;
       }
 
