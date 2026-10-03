@@ -96,7 +96,6 @@ function renderLanguageSeg() {
       currentLang = code;
       await setLanguage(code);
       renderAll();
-      messenger.runtime.sendMessage({ type: 'refreshMenus' });
     });
     seg.appendChild(opt);
   }

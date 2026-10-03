@@ -15,13 +15,12 @@ This project is a ground-up rewrite built on the ideas of [mcj-kr/thunderbird-em
 
 ## Features
 
-### Three AI surfaces
+### Two AI surfaces
 
 | Surface | Where | What it does |
 |---|---|---|
-| **Auto tagging** | Background | New mail is analyzed and tagged on arrival |
 | **Batch panel** | Toolbar button | Select messages → AI analysis → review/adjust suggested tags per message → apply |
-| **AI summary** | Context menu / message toolbar | Popup with summary, sender and suggested tags (one-click apply) |
+| **AI summary** | Message toolbar button | Popup with summary, sender and suggested tags (one-click apply) |
 
 Batch processing supports three action modes: **tag only / tag + move / move only**. Failures are skipped and retried at the end (attempts configurable); persistent failures get a "Processing Failed" marker tag.
 
@@ -34,8 +33,8 @@ Batch processing supports three action modes: **tag only / tag + move / move onl
 ### More
 
 - **Bilingual UI (中文 / English)** — one-click toggle in settings, summaries follow
-- **Custom tags** — name / key / color / prompt with live validation; built-in bilingual security tags (Scam Alert / SPF Fail / DKIM Fail / Processing Failed); **JSON import & export**
-- **7 LLM providers** — Ollama (local, default), OpenAI (current Responses API), Google Gemini, Anthropic Claude, Mistral, DeepSeek, Custom (any OpenAI-compatible gateway, optional API key)
+- **Custom tags** — name / key / color / prompt with live validation; tags named exactly like existing Thunderbird tags are **reused automatically**; **JSON import & export**
+- **7 LLM providers** — Custom gateway (default), Ollama (local), OpenAI (current Responses API), Google Gemini, Anthropic Claude, Mistral, DeepSeek, Custom (any OpenAI-compatible gateway, optional API key)
 - **Custom endpoints** — any Base URL (scheme + host + port) and model per provider; point at local gateways like `http://127.0.0.1:8080/v1`; built-in "Fetch Models", "Test Connection" and a live full-endpoint preview
 - **Advanced settings** — concurrency (1–8), temperature, max tokens, retry attempts (1–10)
 

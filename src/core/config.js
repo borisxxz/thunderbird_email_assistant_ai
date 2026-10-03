@@ -1,14 +1,14 @@
-export const TAG_KEY_PREFIX = "_ma_";
-
-export const HARDCODED_TAGS = {
-  is_scam: { key: "is_scam", name: "诈骗警报 Scam Alert", color: "#FF5722" },
-  spf_fail: { key: "spf_fail", name: "SPF验证失败 SPF Fail", color: "#E91E63" },
-  dkim_fail: { key: "dkim_fail", name: "DKIM验证失败 DKIM Fail", color: "#E91E63" },
-  failed: { key: "failed", name: "处理失败 Processing Failed", color: "#B71C1C" }
-};
+// Not a user-managed tag: applied when a message fails all retry attempts.
+export const FAILED_TAG = { key: "processing_failed", name: "处理失败 Processing Failed", color: "#B71C1C" };
 
 // Legacy tag from earlier versions; no longer applied, removed if present.
-export const RETIRED_TAG_KEYS = ["_ma_tagged"];
+export const RETIRED_TAG_KEYS = [
+  "_ma_tagged",
+  "_ma_is_scam",
+  "_ma_spf_fail",
+  "_ma_dkim_fail",
+  "_ma_failed"
+];
 
 export const DEFAULT_CUSTOM_TAGS = [
   {
@@ -117,7 +117,7 @@ export function providerSettings(providerKey) {
 }
 
 export const DEFAULTS = {
-  provider: "ollama",
+  provider: "custom",
   customTags: DEFAULT_CUSTOM_TAGS,
   concurrency: 2,
   temperature: null,
@@ -153,11 +153,6 @@ export const PROMPT_BASE = [
   '',
   '### INSTRUCTIONS',
   'Based on the data above, please populate the following JSON object:',
-  '- sender: simply extract \'from\'',
-  '- sender_consistent: check if from fields is consistent with headers and is not trying to spool identity',
-  '- spf_pass: (boolean) check if there is positive verification in spf headers (leave null if no information is available or for spf-soft fail with ~all)',
-  '- dkim_pass: (boolean) check if there is positive verification in dkim headers (leave null if no information is available)',
-  '- is_scam: (boolean) check if the mail sounds like a scam'
 ].join('\n');
 
 export const CONTEXT_TOKEN_LIMIT = 128000;

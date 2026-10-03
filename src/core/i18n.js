@@ -38,7 +38,7 @@ export const MESSAGES = {
 
     // Options page — tags
     tagsTitle: 'Custom Tags',
-    tagsDesc: 'Built-in tags (Scam / SPF / DKIM) are always active. Manage your own categories here.',
+    tagsDesc: 'Define your own categories. Tags named exactly like existing Thunderbird tags are reused.',
     tagCount: '{count} tags',
     emptyTagsTitle: 'No custom tags yet',
     emptyTagsDesc: 'Tags let the AI sort your mail into your own categories.',
@@ -110,8 +110,6 @@ export const MESSAGES = {
     from: 'From',
 
     // Menus
-    menuSummarize: 'AI Summary',
-    menuBatch: 'Batch AI Tagging',
     notifyTitle: 'AI Mail Assistant',
     notifyStart: 'Analyzing {count} message(s)…',
     notifyReviewReady: 'Analyzed {count} message(s) — open the toolbar panel to confirm tags.',
@@ -188,7 +186,7 @@ export const MESSAGES = {
     toastSaveFailed: '保存失败：{message}',
 
     tagsTitle: '自定义标签',
-    tagsDesc: '诈骗 / SPF / DKIM 等内置标签自动生效，在此管理你自己的分类。',
+    tagsDesc: '在此定义你自己的分类。与 Thunderbird 现有标签同名的会被直接复用，不重名则新建。',
     tagCount: '共 {count} 个标签',
     emptyTagsTitle: '还没有自定义标签',
     emptyTagsDesc: '标签让 AI 按你的分类规则整理邮件。',
@@ -257,8 +255,6 @@ export const MESSAGES = {
     copied: '已复制！',
     from: '发件人',
 
-    menuSummarize: 'AI 摘要',
-    menuBatch: '批量 AI 打标',
     notifyTitle: 'AI 邮件助手',
     notifyStart: '正在分析 {count} 封邮件…',
     notifyReviewReady: '{count} 封邮件分析完成——打开工具栏面板确认标签。',

@@ -1,4 +1,4 @@
-import { DEFAULTS, HARDCODED_TAGS, TAG_KEY_PREFIX } from './config.js';
+import { DEFAULTS } from './config.js';
 import { findEmailParts } from './analysis.js';
 import { PROVIDER_ENGINES } from '../providers/index.js';
 
@@ -15,23 +15,16 @@ async function analyzeEmail(structuredData) {
 
 export function tagsFromAnalysis(analysis, customTags) {
   const tagKeys = new Set();
-
-  if (analysis.is_scam || analysis.spf_pass === false || analysis.dkim_pass === false) {
-    tagKeys.add(TAG_KEY_PREFIX + HARDCODED_TAGS.is_scam.key);
-  }
-  if (analysis.spf_pass === false) tagKeys.add(TAG_KEY_PREFIX + HARDCODED_TAGS.spf_fail.key);
-  if (analysis.dkim_pass === false) tagKeys.add(TAG_KEY_PREFIX + HARDCODED_TAGS.dkim_fail.key);
-
   for (const tag of customTags) {
     if (analysis[tag.key] === true) {
-      tagKeys.add(TAG_KEY_PREFIX + tag.key);
+      tagKeys.add(tag.key);
     }
   }
-
   return tagKeys;
 }
 
 // Analyze a message without touching its tags; returns { analysis, tagKeys } or null.
+// tagKeys are the real Thunderbird tag keys (same-name manual tags are reused).
 export async function analyzeMessage(message) {
   const fullMessage = await messenger.messages.getFull(message.id);
   const { body, attachments } = findEmailParts(fullMessage.parts);
@@ -47,17 +40,10 @@ export async function analyzeMessage(message) {
     return null;
   }
 
-  const { customTags } = await messenger.storage.local.get({ customTags: DEFAULTS.customTags });
-  return { analysis, tagKeys: tagsFromAnalysis(analysis, customTags) };
-}
-
-export async function processMessage(message) {
-  const result = await analyzeMessage(message);
-  if (!result) return false;
-
-  const messageDetails = await messenger.messages.get(message.id);
-  const existingTags = new Set(messageDetails.tags || []);
-
-  await messenger.messages.update(message.id, { tags: Array.from(new Set([...existingTags, ...result.tagKeys])) });
-  return true;
+  const { customTags, tagKeys: keyMap } = await messenger.storage.local.get({
+    customTags: DEFAULTS.customTags,
+    tagKeys: {}
+  });
+  const tagKeys = [...tagsFromAnalysis(analysis, customTags)].map(key => keyMap[key] || key);
+  return { analysis, tagKeys };
 }

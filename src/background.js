@@ -1,38 +1,9 @@
-import { analyzeMessage, processMessage } from './core/processor.js';
-import { DEFAULTS, HARDCODED_TAGS, TAG_KEY_PREFIX } from './core/config.js';
+import { analyzeMessage } from './core/processor.js';
+import { DEFAULTS, FAILED_TAG } from './core/config.js';
 import { ensureTagsExist } from './core/tags.js';
 import { getLanguage, t } from './core/i18n.js';
 
 console.log("Email Assistant: Background script loaded.");
-
-// --- Automatic tagging on new mail ---
-messenger.messages.onNewMailReceived.addListener(async (folder, messages) => {
-  console.log("Email Assistant: New mail received in", folder.path);
-
-  for (const message of messages.messages) {
-    try {
-      await processMessage(message);
-    } catch (error) {
-      console.error("Email Assistant: Error processing message ID:", message.id, error);
-    }
-  }
-});
-
-// --- Context menu: AI summary for a single message ---
-async function rebuildMenus() {
-  await getLanguage();
-  await messenger.menus.removeAll();
-  messenger.menus.create({
-    id: 'ai-summary',
-    title: t('menuSummarize'),
-    contexts: ['message_list', 'message_display']
-  });
-  messenger.menus.create({
-    id: 'ai-batch',
-    title: t('menuBatch'),
-    contexts: ['message_list']
-  });
-}
 
 function notifyBasic(text) {
   messenger.notifications.create({
@@ -42,29 +13,6 @@ function notifyBasic(text) {
     iconUrl: messenger.runtime.getURL('icons/icon-48.png')
   });
 }
-
-messenger.menus.onClicked.addListener(async (info) => {
-  if (info.menuItemId === 'ai-batch') {
-    if (info.selectedMessages) {
-      const messages = await allListMessages(info.selectedMessages);
-      if (messages.length) {
-        await startBatchWith(messages.map(m => ({ id: m.id, subject: m.subject || '' })), true);
-      }
-    }
-    return;
-  }
-  if (info.menuItemId !== 'ai-summary') return;
-
-  let message = null;
-  if (info.selectedMessages && info.selectedMessages.messages.length > 0) {
-    message = info.selectedMessages.messages[0];
-  } else if (info.displayedMessage) {
-    message = info.displayedMessage;
-  }
-  if (!message) return;
-
-  await openSummaryWindow(message.id);
-});
 
 // Button in the message display toolbar: summarize the currently displayed message.
 messenger.messageDisplayAction.onClicked.addListener(async (tab) => {
@@ -115,11 +63,12 @@ function batchStatus() {
 }
 
 async function tagCatalog() {
-  const { customTags } = await messenger.storage.local.get({ customTags: DEFAULTS.customTags });
+  const { customTags, tagKeys: keyMap } = await messenger.storage.local.get({
+    customTags: DEFAULTS.customTags,
+    tagKeys: {}
+  });
   const catalog = {};
-  for (const tag of Object.values(HARDCODED_TAGS)) {
-    catalog[TAG_KEY_PREFIX + tag.key] = { name: tag.name, color: tag.color, moveNone: true };
-  }
+  catalog[keyMap[FAILED_TAG.key] || FAILED_TAG.key] = { name: FAILED_TAG.name, color: FAILED_TAG.color, moveNone: true };
   for (const tag of customTags) {
     const entry = { name: tag.name, color: tag.color };
     const folder = tag.folder || 'auto'; // legacy '' behaves like auto
@@ -137,7 +86,7 @@ async function tagCatalog() {
         entry.folderLabel = folder;
       }
     }
-    catalog[TAG_KEY_PREFIX + tag.key] = entry;
+    catalog[keyMap[tag.key] || tag.key] = entry;
   }
   return catalog;
 }
@@ -261,7 +210,8 @@ async function applyReview(items) {
   });
   const doTag = batchAction !== 'move';
   const doMove = batchAction !== 'tag';
-  const FAIL_TAG = TAG_KEY_PREFIX + 'failed';
+  const { tagKeys: failKeyMap } = await messenger.storage.local.get({ tagKeys: {} });
+  const FAIL_TAG = failKeyMap[FAILED_TAG.key] || FAILED_TAG.key;
   const MAX_ATTEMPTS = Math.min(10, Math.max(1, Number(maxAttempts) || DEFAULTS.maxAttempts));
 
   batch = {
@@ -274,6 +224,18 @@ async function applyReview(items) {
   };
   autoFolderCache.clear();
 
+  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  // A message id becomes invalid once the message has been moved.
+  const messageGone = async (id) => {
+    try {
+      await messenger.messages.get(id);
+      return false;
+    } catch (e) {
+      return /not found|nonexistent|does not exist|unable to find/i.test(String(e.message || e));
+    }
+  };
+
   const applyOne = async (item) => {
     if (doTag) {
       const details = await messenger.messages.get(item.id);
@@ -284,7 +246,16 @@ async function applyReview(items) {
       const target = moveTargetFor(item, batch.catalog);
       if (target) {
         const destId = target.folderAuto ? await autoFolderIdFor(item, target) : target.folderId;
-        await messenger.messages.move([item.id], destId);
+        if (doTag) await sleep(400); // let the IMAP STORE (tags) commit before MOVE
+        try {
+          await messenger.messages.move([item.id], destId);
+        } catch (error) {
+          // Some servers move the message but still report an error (timeouts);
+          // a vanished id means the move actually happened — don't fail (and
+          // don't retry against a dead id, which would also drop the tags).
+          if (await messageGone(item.id)) return;
+          throw error;
+        }
         batch.moved += 1;
       } else if (!doTag) {
         throw new Error('No tag with a target folder');
@@ -419,8 +390,6 @@ messenger.runtime.onMessage.addListener((msg) => {
         batch = { ...batch, phase: 'idle', current: 0, total: 0, ok: 0, fail: 0, moved: 0, lastSubject: '', lastError: null, failDetails: [], consecutiveFails: 0, reviewItems: [] };
       }
       return Promise.resolve(batchStatus());
-    case 'refreshMenus':
-      return rebuildMenus().then(() => true);
     default:
       return undefined;
   }
@@ -428,4 +397,3 @@ messenger.runtime.onMessage.addListener((msg) => {
 
 // --- Initialize ---
 ensureTagsExist();
-rebuildMenus();

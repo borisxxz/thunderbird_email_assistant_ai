@@ -1,8 +1,10 @@
-import { DEFAULTS, HARDCODED_TAGS, TAG_KEY_PREFIX, RETIRED_TAG_KEYS } from "./config.js";
+import { DEFAULTS, FAILED_TAG, RETIRED_TAG_KEYS } from "./config.js";
 
-// Tag labels created by earlier versions carried an "A: " prefix; migrate them.
-const LEGACY_NAME_PREFIX = "A: ";
-
+// Resolves each tag definition to a real Thunderbird tag key:
+//  1. an existing tag with the exact same name is reused (manual tags included),
+//  2. otherwise a new tag is created with the definition's key,
+//  3. if that key is taken by a differently-named tag, a "_ai" suffix is added.
+// The defKey -> realKey mapping is persisted in storage as `tagKeys`.
 export async function ensureTagsExist() {
   let allTags;
   try {
@@ -12,43 +14,57 @@ export async function ensureTagsExist() {
     return;
   }
 
-  const { customTags } = await messenger.storage.local.get({ customTags: DEFAULTS.customTags });
-  const tagsToEnsure = [...Object.values(HARDCODED_TAGS), ...customTags];
+  const { customTags, tagKeys: oldMap } = await messenger.storage.local.get({
+    customTags: DEFAULTS.customTags,
+    tagKeys: {}
+  });
+  const tagDefs = [...customTags, FAILED_TAG];
+  const keyMap = {};
+  const legacyPrefix = "_ma_";
 
-  for (const tagToCreate of tagsToEnsure) {
+  for (const tagDef of tagDefs) {
     // One tag failing must not abort the migration of the others.
     try {
-      const key = TAG_KEY_PREFIX + tagToCreate.key;
-      const byKey = allTags.find(existingTag => existingTag.key === key);
+      // Reuse a tag the user created manually — but never our own legacy
+      // "_ma_"-prefixed ones; those are rebuilt and removed instead.
+      const sameName = allTags.find(existing =>
+        existing.tag === tagDef.name && !existing.key.startsWith(legacyPrefix));
+      if (sameName) {
+        keyMap[tagDef.key] = sameName.key;
+        continue;
+      }
 
-      if (byKey) {
-        if (byKey.tag !== tagToCreate.name && messenger.messages.tags.update) {
-          console.log(`Email Assistant: Updating tag label: ${byKey.tag} -> ${tagToCreate.name}`);
-          await messenger.messages.tags.update(key, { tag: tagToCreate.name, color: tagToCreate.color });
-        }
-      } else {
-        // Only skip creation when a differently-keyed tag already uses this name
-        // (or its legacy "A: " variant) — creating a duplicate name is confusing.
-        const nameTaken = allTags.some(existingTag =>
-          existingTag.tag === tagToCreate.name ||
-          existingTag.tag === LEGACY_NAME_PREFIX + tagToCreate.name
-        );
-        if (!nameTaken) {
-          console.log(`Email Assistant: Creating new tag: ${tagToCreate.name}`);
-          await messenger.messages.tags.create(key, tagToCreate.name, tagToCreate.color);
+      let key = tagDef.key;
+      if (allTags.some(existing => existing.key === key)) {
+        key = `${tagDef.key}_ai`;
+      }
+      await messenger.messages.tags.create(key, tagDef.name, tagDef.color);
+      allTags.push({ key, tag: tagDef.name });
+      keyMap[tagDef.key] = key;
+
+      // Remove the legacy prefixed variant of this tag, if present.
+      const legacyKey = legacyPrefix + tagDef.key;
+      if (legacyKey !== key && allTags.some(existing => existing.key === legacyKey)) {
+        try {
+          await messenger.messages.tags.delete(legacyKey);
+          allTags = allTags.filter(existing => existing.key !== legacyKey);
+          console.log(`Email Assistant: Removed legacy tag: ${legacyKey}`);
+        } catch (error) {
+          console.error(`Email Assistant: Error removing legacy tag ${legacyKey}:`, error);
         }
       }
     } catch (error) {
-      console.error(`Email Assistant: Error ensuring tag ${tagToCreate.name}:`, error);
+      console.error(`Email Assistant: Error ensuring tag ${tagDef.name}:`, error);
+      if (oldMap[tagDef.key]) keyMap[tagDef.key] = oldMap[tagDef.key];
     }
   }
 
-  // Remove tags this add-on no longer applies — but never ones the user kept.
+  await messenger.storage.local.set({ tagKeys: keyMap });
+
+  // Remove tags this add-on no longer uses at all.
   if (messenger.messages.tags.delete) {
-    const activeKeys = new Set(tagsToEnsure.map(tag => TAG_KEY_PREFIX + tag.key));
     for (const key of RETIRED_TAG_KEYS) {
-      if (activeKeys.has(key)) continue;
-      if (allTags.some(existingTag => existingTag.key === key)) {
+      if (allTags.some(existing => existing.key === key)) {
         try {
           await messenger.messages.tags.delete(key);
           console.log(`Email Assistant: Removed retired tag: ${key}`);

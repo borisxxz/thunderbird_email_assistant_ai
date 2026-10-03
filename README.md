@@ -3,7 +3,7 @@
 **[English](./README.en.md)** | 中文
 
 ![Thunderbird](https://img.shields.io/badge/Thunderbird-102%2B-%230F8FF?logo=thunderbird&logoColor=white)
-![Version](https://img.shields.io/badge/version-0.0.2-indigo)
+![Version](https://img.shields.io/badge/version-0.0.3-indigo)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![CI](https://img.shields.io/badge/CI-GitHub%20Actions%20%2B%20CNB-blue)
 
@@ -17,13 +17,12 @@
 
 ## 功能
 
-### 三个 AI 入口
+### 两个 AI 入口
 
 | 入口 | 位置 | 说明 |
 |---|---|---|
-| **自动打标** | 后台 | 新邮件到达即分析并打标 |
 | **批量处理** | 工具栏按钮 | 选中多封邮件 → AI 分析 → 逐封确认/调整候选标签 → 应用 |
-| **AI 摘要** | 右键菜单 / 邮件工具条按钮 | 弹窗显示摘要、发件人、建议标签（可一键应用） |
+| **AI 摘要** | 邮件查看工具条按钮 | 弹窗显示摘要、发件人、建议标签（可一键应用） |
 
 批量处理支持三种动作模式：**仅打标签 / 打标+移动 / 仅移动**；失败自动跳过并在最后统一重试（次数可配），多次失败打"处理失败 Processing Failed"标记。
 
@@ -36,8 +35,8 @@
 ### 其他
 
 - **双语界面（中文 / English）**：设置页顶栏一键切换，摘要语言跟随
-- **自定义标签**：名称 / key / 颜色 / 提示词实时校验；内置双语安全标签（诈骗警报 / SPF验证失败 / DKIM验证失败 / 处理失败）始终生效；标签支持 **JSON 导入导出**
-- **7 个 LLM 提供商**：Ollama（本地，默认）、OpenAI（现行 Responses API）、Google Gemini、Anthropic Claude、Mistral、DeepSeek、Custom（任意 OpenAI 兼容网关，API Key 可选）
+- **自定义标签**：名称 / key / 颜色 / 提示词实时校验；与 Thunderbird 现有标签**同名自动复用**（不重名则新建）；标签支持 **JSON 导入导出**
+- **7 个 LLM 提供商**：Custom 自定义网关（默认）、Ollama（本地）、OpenAI（现行 Responses API）、Google Gemini、Anthropic Claude、Mistral、DeepSeek、Custom（任意 OpenAI 兼容网关，API Key 可选）
 - **自定义端点**：每个提供商支持任意 Base URL（协议+主机+端口）与模型，可指向本地网关（如 `http://127.0.0.1:8080/v1`）；内置"获取模型""测试连接"和完整请求地址实时预览
 - **高级设置**：并发数（1–8）、Temperature、最大 Token 数、失败重试次数（1–10）
 

@@ -1,4 +1,4 @@
-import { DEFAULTS, HARDCODED_TAGS, TAG_KEY_PREFIX } from '../core/config.js';
+import { DEFAULTS } from '../core/config.js';
 import { findEmailParts } from '../core/analysis.js';
 import { buildSummaryPrompt } from '../core/summary.js';
 import { PROVIDER_ENGINES } from '../providers/index.js';
@@ -43,9 +43,6 @@ function renderChips() {
   if (!analysis) return;
   const suggestions = [];
 
-  if (analysis.is_scam) suggestions.push(HARDCODED_TAGS.is_scam);
-  if (analysis.spf_pass === false) suggestions.push(HARDCODED_TAGS.spf_fail);
-  if (analysis.dkim_pass === false) suggestions.push(HARDCODED_TAGS.dkim_fail);
   for (const tag of customTags) {
     if (analysis[tag.key] === true) suggestions.push({ key: tag.key, name: tag.name, color: tag.color });
   }
@@ -76,7 +73,8 @@ function renderChips() {
       try {
         const details = await messenger.messages.get(Number(messageId));
         const tags = new Set(details.tags || []);
-        tags.add(TAG_KEY_PREFIX + tag.key);
+        const { tagKeys: keyMap } = await messenger.storage.local.get({ tagKeys: {} });
+        tags.add(keyMap[tag.key] || tag.key);
         await messenger.messages.update(Number(messageId), { tags: Array.from(tags) });
       } catch (err) {
         console.error('Email Assistant: failed to apply tag:', err);
