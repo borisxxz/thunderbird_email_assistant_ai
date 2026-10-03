@@ -628,10 +628,16 @@ async function copyDiagnosis() {
   const tbTags = await messenger.messages.tags.list();
   const { noTagAccounts = [] } = await messenger.storage.local.get({ noTagAccounts: [] });
   const { noTagFailures = {} } = await messenger.storage.local.get({ noTagFailures: {} });
+  const { lastBatch = null } = await messenger.storage.local.get({ lastBatch: null });
   const lines = [
     '[Email Assistant tag diagnosis]',
     `accounts with tagging auto-skipped: ${noTagAccounts.length ? noTagAccounts.join(', ') : '(none)'}`,
     `tag write failure counts: ${Object.keys(noTagFailures).length ? Object.entries(noTagFailures).map(([k, v]) => k + ':' + v).join(' ') : '(none)'}`,
+    ...(lastBatch ? [
+      `last batch: ${lastBatch.phase}, ok=${lastBatch.ok} fail=${lastBatch.fail} moved=${lastBatch.moved}`,
+      ...(lastBatch.failDetails || []).map(d => `  fail #${d.n}: ${d.reason}`),
+      ...(lastBatch.skippedNotes || []).map(n => `  note: ${n}`),
+    ] : ['last batch: (none)']),
     `version: ${manifest.version}`,
     `language: ${currentLang}`,
     '',

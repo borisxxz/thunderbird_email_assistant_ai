@@ -300,14 +300,16 @@ async function applyReview(items) {
       // an immediate read can still see the stale pre-write state.
       await sleep(IMAP_DELAY);
       let missing = [];
-      for (let attempt = 0; attempt < 3; attempt++) {
+      let readBack = null;
+      for (let attempt = 0; attempt < 5; attempt++) {
         const after = await withTimeout(messenger.messages.get(item.id), IMAP_TIMEOUT, "Verify read");
-        missing = item.tags.filter(key => !(after.tags || []).includes(key));
+        readBack = after.tags || [];
+        missing = item.tags.filter(key => !readBack.includes(key));
         if (!missing.length) break;
-        await sleep(IMAP_DELAY);
+        await sleep(1000);
       }
       if (missing.length) {
-        throw new Error(`Tag not applied: ${missing.join(', ')}`);
+        throw new Error(`Tag not applied: ${missing.join(', ')} (read back: [${readBack.join(', ')}])`);
       }
       const defs = await messenger.messages.tags.list();
       const defKeys = new Set(defs.map(x => x.key));
@@ -401,6 +403,9 @@ async function applyReview(items) {
   if (batch.phase === 'applying') {
     batch.phase = batch.cancelRequested ? 'cancelled' : 'done';
   }
+  try {
+    await messenger.storage.local.set({ lastBatch: batchStatus() });
+  } catch { /* diagnostic only */ }
   console.log(`Email Assistant: Apply ${batch.phase} — ok: ${batch.ok}, fail: ${batch.fail}, moved: ${batch.moved}`);
   notifyBasic(batch.phase === 'done'
     ? t('notifyApplied', { ok: batch.ok, fail: batch.fail, moved: batch.moved })
