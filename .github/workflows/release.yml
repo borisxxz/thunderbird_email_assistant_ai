@@ -50,7 +50,9 @@ jobs:
           cp "$ZIP" "email_assistant-${VER}-github.xpi"
 
           sed -i "s|https://github.com/${REPO}/releases/latest/download/updates.json|https://cnb.cool/${CNB_REPO}/-/git/raw/main/updates-cnb.json|" ../manifest.json
+          cd ..
           npx web-ext build --overwrite-dest --ignore-files "src/" "node_modules/" "package.json" "package-lock.json" "webpack.config.js" "build.bash" "doc/"
+          cd web-ext-artifacts
           cp "$ZIP" "email_assistant-${VER}-cnb.xpi"
 
           cat > updates.json <<EOF
