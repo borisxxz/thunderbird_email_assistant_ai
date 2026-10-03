@@ -244,6 +244,13 @@ async function applyReview(items) {
       const details = await messenger.messages.get(item.id);
       const merged = new Set([...(details.tags || []), ...item.tags]);
       await messenger.messages.update(item.id, { tags: Array.from(merged) });
+      // Some providers silently drop tag keys on write (notably Gmail IMAP,
+      // which ignores custom keywords) — verify instead of trusting the OK.
+      const after = await messenger.messages.get(item.id);
+      const missing = item.tags.filter(key => !(after.tags || []).includes(key));
+      if (missing.length) {
+        throw new Error(`Tag not applied: ${missing.join(', ')}`);
+      }
       await sleep(IMAP_DELAY);
     }
     if (doMove) {
