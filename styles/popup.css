@@ -1,7 +1,7 @@
 /* ============================================================
    工具栏 Popup（360×480）
    ============================================================ */
-html, body { width: 400px; height: 620px; overflow: hidden; }
+html, body { min-width: 360px; max-width: 720px; margin: 0 auto; height: 100vh; overflow: hidden; }
 body { display: flex; flex-direction: column; }
 
 .ea-popup__head {

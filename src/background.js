@@ -15,31 +15,25 @@ function notifyBasic(text) {
   });
 }
 
-// Toolbar button opens the batch panel as a standalone window: it stays
-// visible when the user switches apps (popups auto-dismiss on click-away).
-let batchWindowId = null;
+// Toolbar button opens the batch panel as a tab inside the Thunderbird
+// window it was clicked in: it stays visible when the user switches apps
+// (unlike a popup) and lives inside Thunderbird (unlike a separate window).
+let batchTabId = null;
 
 messenger.browserAction.onClicked.addListener(async (tab) => {
-  if (batchWindowId !== null) {
-    try {
-      await messenger.windows.update(batchWindowId, { focused: true });
+  try {
+    const existing = await messenger.tabs.query({ url: messenger.runtime.getURL('popup.html') + '*' });
+    if (existing.length) {
+      await messenger.tabs.update(existing[0].id, { active: true });
       return;
-    } catch {
-      batchWindowId = null;
     }
-  }
-  // Remember which mail window the button was clicked in; the panel is its
-  // own window and must scan that origin window's selection.
-  const win = await messenger.windows.create({
-    type: 'popup',
+  } catch { /* fall through and create */ }
+  const created = await messenger.tabs.create({
     url: messenger.runtime.getURL(`popup.html?win=${tab.windowId}`),
-    width: 420, height: 640
+    windowId: tab.windowId,
+    active: true
   });
-  batchWindowId = win.id;
-});
-
-messenger.windows.onRemoved.addListener((windowId) => {
-  if (windowId === batchWindowId) batchWindowId = null;
+  batchTabId = created.id;
 });
 
 // Button in the message display toolbar: summarize the currently displayed message.
