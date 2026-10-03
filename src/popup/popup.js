@@ -285,9 +285,32 @@ async function poll() {
   }
 }
 
+// Selection is queried locally so `currentWindow` means exactly the window
+// this popup belongs to — a second window resting on another account can
+// never leak its selection into the batch again.
+async function scanSelectionHere() {
+  let tabs = await messenger.mailTabs.query({ active: true, currentWindow: true });
+  if (!tabs.length) tabs = await messenger.mailTabs.query({ currentWindow: true });
+  if (!tabs.length) return [];
+
+  const list = await messenger.mailTabs.getSelectedMessages(tabs[0].id);
+  if (!list) return [];
+
+  const messages = [...(list.messages || [])];
+  while (list.id) {
+    try {
+      list = await messenger.messages.continueList(list.id);
+      messages.push(...(list.messages || []));
+    } catch {
+      break;
+    }
+  }
+  return messages.map(m => ({ id: m.id, subject: m.subject || '', author: m.author || '' }));
+}
+
 async function rescan() {
   try {
-    selection = await send({ type: 'scanSelection' }) || [];
+    selection = await scanSelectionHere();
   } catch {
     selection = [];
   }
@@ -339,7 +362,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 $('btn-start').addEventListener('click', async () => {
-  const resp = await send({ type: 'ea.batch.start' });
+  const messages = await scanSelectionHere().catch(() => []);
+  const resp = await send({ type: 'ea.batch.startWith', messages });
   if (resp && resp.alreadyRunning) {
     $('popup-body').classList.add('ea-shake');
     setTimeout(() => $('popup-body').classList.remove('ea-shake'), 300);

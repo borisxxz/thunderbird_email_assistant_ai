@@ -471,6 +471,8 @@ messenger.runtime.onMessage.addListener((msg) => {
       return scanSelection();
     case 'ea.batch.start':
       return startBatch();
+    case 'ea.batch.startWith':
+      return startBatchWith(msg.messages || [], false);
     case 'ea.batch.apply':
       return applyReview(msg.items || []);
     case 'ea.batch.status':
