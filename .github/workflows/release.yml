@@ -24,6 +24,7 @@ jobs:
         run: npx webpack
 
       - name: Lint
+        continue-on-error: true  # newer web-ext treats Thunderbird-only permissions as errors
         run: npx web-ext lint --ignore-files "src/" "node_modules/" "package.json" "package-lock.json" "webpack.config.js" "build.bash" "doc/"
 
       - name: Package zip
