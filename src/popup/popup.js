@@ -84,8 +84,11 @@ function renderBatch(status) {
   } else if (status.phase === 'done') {
     $('ok-num').textContent = status.ok;
     $('fail-num').textContent = status.fail;
-    $('done-moved').hidden = !status.moved;
-    $('done-moved').textContent = status.moved ? t('movedStat', { count: status.moved }) : '';
+  $('done-moved').hidden = !(status.moved || (status.skippedNotes || []).length);
+    $('done-moved').textContent = [
+      status.moved ? t('movedStat', { count: status.moved }) : '',
+      ...(status.skippedNotes || []).map(n => n.split(' · ').pop())
+    ].filter(Boolean).join('\n');
     renderFailDetails(status);
     setPhase('done');
     setInlineStatus(status.fail > 0 ? 'warning' : 'success',

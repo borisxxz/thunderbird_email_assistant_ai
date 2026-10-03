@@ -625,8 +625,10 @@ async function copyDiagnosis() {
   const manifest = messenger.runtime.getManifest();
   const { tagKeys } = await messenger.storage.local.get({ tagKeys: {} });
   const tbTags = await messenger.messages.tags.list();
+  const { noTagAccounts = [] } = await messenger.storage.local.get({ noTagAccounts: [] });
   const lines = [
     '[Email Assistant tag diagnosis]',
+    `accounts with tagging auto-skipped: ${noTagAccounts.length ? noTagAccounts.join(', ') : '(none)'}`,
     `version: ${manifest.version}`,
     `language: ${currentLang}`,
     '',

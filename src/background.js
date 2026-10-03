@@ -58,6 +58,7 @@ function batchStatus() {
     lastSubject: batch.lastSubject,
     lastError: batch.lastError,
     failDetails: batch.failDetails.slice(0, 8),
+    skippedNotes: (batch.skippedNotes || []).slice(0, 8),
     reviewItems: batch.reviewItems,
     catalog: batch.catalog
   };
@@ -233,6 +234,7 @@ async function applyReview(items) {
   });
   const doTag = batchAction !== 'move';
   const doMove = batchAction !== 'tag';
+  const { noTagAccounts = [] } = await messenger.storage.local.get({ noTagAccounts: [] });
   const { tagKeys: failKeyMap } = await messenger.storage.local.get({ tagKeys: {} });
   const FAIL_TAG = failKeyMap[FAILED_TAG.key] || FAILED_TAG.key;
   const MAX_ATTEMPTS = Math.min(10, Math.max(1, Number(maxAttempts) || DEFAULTS.maxAttempts));
@@ -240,7 +242,7 @@ async function applyReview(items) {
   batch = {
     ...batch,
     phase: 'applying',
-    current: 0, total: items.length, ok: 0, fail: 0, moved: 0,
+    current: 0, total: items.length, ok: 0, fail: 0, moved: 0, skippedNotes: [],
     lastSubject: '', lastError: null,
     failDetails: [],
     cancelRequested: false
@@ -280,8 +282,15 @@ async function applyReview(items) {
 
   const applyOne = async (item) => {
     if (doTag) {
+      const details0 = await withTimeout(messenger.messages.get(item.id), IMAP_TIMEOUT, "Tag read");
+      const account = details0.accountId || (details0.folder && details0.folder.accountId);
+      if (account && noTagAccounts.includes(account)) {
+        batch.skippedNotes.push(`#${item.idx} ${item.subject || ''} · ${t('tagUnsupportedNote')}`);
+        batch.lastSubject = t('tagSkippedLine', { subject: item.subject || '' });
+        return; // move may still run below? no — return skips it too; fall through instead
+      }
       await sleep(IMAP_DELAY);
-      const details = await withTimeout(messenger.messages.get(item.id), IMAP_TIMEOUT, "Tag read");
+      const details = details0;
       const merged = new Set([...(details.tags || []), ...item.tags]);
       await withTimeout(messenger.messages.update(item.id, { tags: Array.from(merged) }), IMAP_TIMEOUT, "Tag write");
       // Verify the tags really landed. The write settles asynchronously in
@@ -296,6 +305,14 @@ async function applyReview(items) {
         await sleep(IMAP_DELAY);
       }
       if (missing.length) {
+        if (account) {
+          // Server does not persist custom tag keywords (e.g. Microsoft IMAP).
+          // Remember it and degrade gracefully: skip tagging for this account.
+          noTagAccounts.push(account);
+          await messenger.storage.local.set({ noTagAccounts });
+          batch.skippedNotes.push(`#${item.idx} ${item.subject || ''} · ${t('tagUnsupportedNote')}`);
+          return;
+        }
         throw new Error(`Tag not applied: ${missing.join(', ')}`);
       }
       const defs = await messenger.messages.tags.list();
