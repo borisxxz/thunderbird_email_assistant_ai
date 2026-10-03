@@ -248,7 +248,24 @@ async function applyReview(items) {
   autoFolderCache.clear();
   await ensureTagDefinitions([...new Set(items.flatMap(i => i.tags || []))], batch.catalog);
 
-  const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+  const IMAP_TIMEOUT = 30000; // a hung IMAP call must not wedge the whole batch
+  const withTimeout = (p, ms, what) => Promise.race([
+    p,
+    new Promise((_, reject) => {
+      const iv = setInterval(() => {
+        if (batch.cancelRequested) { clearInterval(iv); reject(new Error(`${what} cancelled`)); }
+      }, 100);
+      setTimeout(() => { clearInterval(iv); reject(new Error(`${what} timed out (${ms / 1000}s)`)); }, ms);
+    })
+  ]);
+  // Cancelling during a delay takes effect immediately, not after the wait.
+  const sleep = async (ms) => {
+    let waited = 0;
+    while (waited < ms && !batch.cancelRequested) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      waited += 100;
+    }
+  };
   const IMAP_DELAY = 500; // breathing room around IMAP operations
 
   // A message id becomes invalid once the message has been moved.
@@ -264,16 +281,16 @@ async function applyReview(items) {
   const applyOne = async (item) => {
     if (doTag) {
       await sleep(IMAP_DELAY);
-      const details = await messenger.messages.get(item.id);
+      const details = await withTimeout(messenger.messages.get(item.id), IMAP_TIMEOUT, "Tag read");
       const merged = new Set([...(details.tags || []), ...item.tags]);
-      await messenger.messages.update(item.id, { tags: Array.from(merged) });
+      await withTimeout(messenger.messages.update(item.id, { tags: Array.from(merged) }), IMAP_TIMEOUT, "Tag write");
       // Verify the tags really landed. The write settles asynchronously in
       // Thunderbird, so re-read after a pause and retry before failing —
       // an immediate read can still see the stale pre-write state.
       await sleep(IMAP_DELAY);
       let missing = [];
       for (let attempt = 0; attempt < 3; attempt++) {
-        const after = await messenger.messages.get(item.id);
+        const after = await withTimeout(messenger.messages.get(item.id), IMAP_TIMEOUT, "Verify read");
         missing = item.tags.filter(key => !(after.tags || []).includes(key));
         if (!missing.length) break;
         await sleep(IMAP_DELAY);
@@ -292,10 +309,10 @@ async function applyReview(items) {
     if (doMove) {
       const target = moveTargetFor(item, batch.catalog);
       if (target) {
-        const destId = target.folderAuto ? await autoFolderIdFor(item, target) : target.folderId;
+        const destId = target.folderAuto ? await withTimeout(autoFolderIdFor(item, target), IMAP_TIMEOUT, "Folder resolve") : target.folderId;
         await sleep(IMAP_DELAY);
         try {
-          await messenger.messages.move([item.id], destId);
+          await withTimeout(messenger.messages.move([item.id], destId), IMAP_TIMEOUT, "Move");
         } catch (error) {
           // Some servers move the message but still report an error (timeouts);
           // a vanished id means the move actually happened — don't fail (and
@@ -329,6 +346,7 @@ async function applyReview(items) {
 
   // Retries: up to MAX_ATTEMPTS tries per message in total.
   for (let attempt = 2; attempt <= MAX_ATTEMPTS && failed.length && !batch.cancelRequested; attempt++) {
+      batch.lastSubject = t('retryingLabel', { attempt: attempt, total: failed.length });
     const still = [];
     for (const entry of failed) {
       if (batch.cancelRequested) break;
@@ -350,9 +368,9 @@ async function applyReview(items) {
     batch.failDetails.push({ n: item.idx, subject: item.subject || '', reason });
     try {
       await sleep(IMAP_DELAY);
-      const details = await messenger.messages.get(item.id);
+      const details = await withTimeout(messenger.messages.get(item.id), IMAP_TIMEOUT, "Fail-tag read");
       const merged = new Set([...(details.tags || []), FAIL_TAG]);
-      await messenger.messages.update(item.id, { tags: Array.from(merged) });
+      await withTimeout(messenger.messages.update(item.id, { tags: Array.from(merged) }), IMAP_TIMEOUT, "Tag write");
     } catch (error) {
       console.error("Email Assistant: Could not apply failure tag to message ID:", item.id, error);
     }
