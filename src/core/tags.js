@@ -28,10 +28,11 @@ export async function ensureTagsExist() {
   for (const tagDef of tagDefs) {
     // One tag failing must not abort the migration of the others.
     try {
-      // Reuse a tag the user created manually — but never our own legacy
-      // "_ma_"-prefixed ones; those are rebuilt and removed instead.
-      const sameName = allTags.find(existing =>
-        existing.tag === tagDef.name && !existing.key.startsWith(legacyPrefix));
+      // Reuse any existing tag with the exact same name — including our own
+      // legacy "_ma_"-prefixed ones. Thunderbird rejects create() when the
+      // name already exists, so excluding them would leave the tag unmapped
+      // and its writes silently dropped.
+      const sameName = allTags.find(existing => existing.tag === tagDef.name);
       if (sameName) {
         keyMap[tagDef.key] = sameName.key;
         continue;
