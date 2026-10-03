@@ -289,8 +289,13 @@ async function poll() {
 // this popup belongs to — a second window resting on another account can
 // never leak its selection into the batch again.
 async function scanSelectionHere() {
-  let tabs = await messenger.mailTabs.query({ active: true, currentWindow: true });
-  if (!tabs.length) tabs = await messenger.mailTabs.query({ currentWindow: true });
+  // The panel runs in its own window; scan the mail window it was opened
+  // from (?win=…). currentWindow would be the panel itself — always empty.
+  const originWindow = Number(new URLSearchParams(location.search).get('win'));
+  let tabs = Number.isFinite(originWindow) && originWindow > 0
+    ? await messenger.mailTabs.query({ active: true, windowId: originWindow })
+    : await messenger.mailTabs.query({ active: true });
+  if (!tabs.length) tabs = await messenger.mailTabs.query({ active: true });
   if (!tabs.length) return [];
 
   const list = await messenger.mailTabs.getSelectedMessages(tabs[0].id);

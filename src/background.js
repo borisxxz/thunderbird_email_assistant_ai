@@ -19,7 +19,7 @@ function notifyBasic(text) {
 // visible when the user switches apps (popups auto-dismiss on click-away).
 let batchWindowId = null;
 
-messenger.browserAction.onClicked.addListener(async () => {
+messenger.browserAction.onClicked.addListener(async (tab) => {
   if (batchWindowId !== null) {
     try {
       await messenger.windows.update(batchWindowId, { focused: true });
@@ -28,9 +28,11 @@ messenger.browserAction.onClicked.addListener(async () => {
       batchWindowId = null;
     }
   }
+  // Remember which mail window the button was clicked in; the panel is its
+  // own window and must scan that origin window's selection.
   const win = await messenger.windows.create({
     type: 'popup',
-    url: messenger.runtime.getURL('popup.html'),
+    url: messenger.runtime.getURL(`popup.html?win=${tab.windowId}`),
     width: 420, height: 640
   });
   batchWindowId = win.id;
