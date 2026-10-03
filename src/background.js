@@ -225,6 +225,7 @@ async function applyReview(items) {
   autoFolderCache.clear();
 
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+  const IMAP_DELAY = 500; // breathing room around IMAP operations
 
   // A message id becomes invalid once the message has been moved.
   const messageGone = async (id) => {
@@ -238,15 +239,17 @@ async function applyReview(items) {
 
   const applyOne = async (item) => {
     if (doTag) {
+      await sleep(IMAP_DELAY);
       const details = await messenger.messages.get(item.id);
       const merged = new Set([...(details.tags || []), ...item.tags]);
       await messenger.messages.update(item.id, { tags: Array.from(merged) });
+      await sleep(IMAP_DELAY);
     }
     if (doMove) {
       const target = moveTargetFor(item, batch.catalog);
       if (target) {
         const destId = target.folderAuto ? await autoFolderIdFor(item, target) : target.folderId;
-        if (doTag) await sleep(400); // let the IMAP STORE (tags) commit before MOVE
+        await sleep(IMAP_DELAY);
         try {
           await messenger.messages.move([item.id], destId);
         } catch (error) {
@@ -256,6 +259,7 @@ async function applyReview(items) {
           if (await messageGone(item.id)) return;
           throw error;
         }
+        await sleep(IMAP_DELAY);
         batch.moved += 1;
       } else if (!doTag) {
         throw new Error('No tag with a target folder');
@@ -301,6 +305,7 @@ async function applyReview(items) {
     batch.fail += 1;
     batch.failDetails.push({ n: item.idx, subject: item.subject || '', reason });
     try {
+      await sleep(IMAP_DELAY);
       const details = await messenger.messages.get(item.id);
       const merged = new Set([...(details.tags || []), FAIL_TAG]);
       await messenger.messages.update(item.id, { tags: Array.from(merged) });
