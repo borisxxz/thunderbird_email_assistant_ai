@@ -88,6 +88,10 @@ function renderChips() {
           ({ tagKeys: keyMap } = await messenger.storage.local.get({ tagKeys: {} }));
           realKey = keyMap[tag.key] || tag.key;
         }
+        const allDefs = await messenger.messages.tags.list();
+        if (!allDefs.some(x => x.key === realKey)) {
+          await messenger.messages.tags.create(realKey, tag.name, tag.color || '#4f46e5');
+        }
         const details = await messenger.messages.get(Number(messageId));
         const tags = new Set(details.tags || []);
         tags.add(realKey);

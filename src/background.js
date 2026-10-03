@@ -204,6 +204,25 @@ async function autoFolderIdFor(item, meta) {
   return created.id;
 }
 
+// Thunderbird only renders tags whose key exists in its tag registry.
+// If a mapped key lost its definition (migration accidents, manual edits),
+// recreate it on the fly so tags are always visible after applying.
+async function ensureTagDefinitions(keys, catalog) {
+  const all = await messenger.messages.tags.list();
+  const known = new Set(all.map(x => x.key));
+  for (const key of keys) {
+    if (known.has(key)) continue;
+    const meta = catalog[key];
+    try {
+      await messenger.messages.tags.create(key, (meta && meta.name) || key, (meta && meta.color) || '#4f46e5');
+      known.add(key);
+      console.log(`Email Assistant: Recreated missing tag definition: ${key}`);
+    } catch (error) {
+      console.error(`Email Assistant: Could not recreate tag definition ${key}:`, error);
+    }
+  }
+}
+
 async function applyReview(items) {
   const { batchAction, maxAttempts } = await messenger.storage.local.get({
     batchAction: DEFAULTS.batchAction,
@@ -224,6 +243,7 @@ async function applyReview(items) {
     cancelRequested: false
   };
   autoFolderCache.clear();
+  await ensureTagDefinitions([...new Set(items.flatMap(i => i.tags || []))], batch.catalog);
 
   const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
   const IMAP_DELAY = 500; // breathing room around IMAP operations
@@ -250,6 +270,12 @@ async function applyReview(items) {
       const missing = item.tags.filter(key => !(after.tags || []).includes(key));
       if (missing.length) {
         throw new Error(`Tag not applied: ${missing.join(', ')}`);
+      }
+      const defs = await messenger.messages.tags.list();
+      const defKeys = new Set(defs.map(x => x.key));
+      const undefinedKeys = item.tags.filter(key => !defKeys.has(key));
+      if (undefinedKeys.length) {
+        throw new Error(`Tag key has no definition: ${undefinedKeys.join(', ')}`);
       }
       await sleep(IMAP_DELAY);
     }
