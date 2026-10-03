@@ -1,6 +1,6 @@
 {
   "name": "email-assistant",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "AI-powered, multi-provider mail tagging extension for Thunderbird",
   "license": "MIT",
   "author": "borisxxz",

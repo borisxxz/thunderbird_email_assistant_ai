@@ -264,10 +264,17 @@ async function applyReview(items) {
       const details = await messenger.messages.get(item.id);
       const merged = new Set([...(details.tags || []), ...item.tags]);
       await messenger.messages.update(item.id, { tags: Array.from(merged) });
-      // Some providers silently drop tag keys on write (notably Gmail IMAP,
-      // which ignores custom keywords) — verify instead of trusting the OK.
-      const after = await messenger.messages.get(item.id);
-      const missing = item.tags.filter(key => !(after.tags || []).includes(key));
+      // Verify the tags really landed. The write settles asynchronously in
+      // Thunderbird, so re-read after a pause and retry before failing —
+      // an immediate read can still see the stale pre-write state.
+      await sleep(IMAP_DELAY);
+      let missing = [];
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const after = await messenger.messages.get(item.id);
+        missing = item.tags.filter(key => !(after.tags || []).includes(key));
+        if (!missing.length) break;
+        await sleep(IMAP_DELAY);
+      }
       if (missing.length) {
         throw new Error(`Tag not applied: ${missing.join(', ')}`);
       }
