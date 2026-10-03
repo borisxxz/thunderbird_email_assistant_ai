@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Email Assistant",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Automatically tags messages based on AI rules, with configurable LLM providers, custom ports and models, batch tagging and AI summaries",
   "default_locale": "en",
   "icons": {
@@ -54,7 +54,8 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "email-assistant@borisxxz.github.io",
-      "strict_min_version": "102.0"
+      "strict_min_version": "102.0",
+      "update_url": "https://github.com/borisxxz/thunderbird_email_assistant_ai/releases/latest/download/updates.json"
     }
   },
   "author": "borisxxz",
