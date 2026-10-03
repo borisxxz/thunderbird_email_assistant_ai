@@ -234,6 +234,7 @@ async function applyReview(items) {
   });
   const doTag = batchAction !== 'move';
   const doMove = batchAction !== 'tag';
+  const { noTagFailures = {} } = await messenger.storage.local.get({ noTagFailures: {} });
   const { noTagAccounts = [] } = await messenger.storage.local.get({ noTagAccounts: [] });
   const { tagKeys: failKeyMap } = await messenger.storage.local.get({ tagKeys: {} });
   const FAIL_TAG = failKeyMap[FAILED_TAG.key] || FAILED_TAG.key;
@@ -284,6 +285,7 @@ async function applyReview(items) {
     if (doTag) {
       const details0 = await withTimeout(messenger.messages.get(item.id), IMAP_TIMEOUT, "Tag read");
       const account = details0.accountId || (details0.folder && details0.folder.accountId);
+      if (account) item.accountId = account;
       if (account && noTagAccounts.includes(account)) {
         batch.skippedNotes.push(`#${item.idx} ${item.subject || ''} · ${t('tagUnsupportedNote')}`);
         batch.lastSubject = t('tagSkippedLine', { subject: item.subject || '' });
@@ -305,14 +307,6 @@ async function applyReview(items) {
         await sleep(IMAP_DELAY);
       }
       if (missing.length) {
-        if (account) {
-          // Server does not persist custom tag keywords (e.g. Microsoft IMAP).
-          // Remember it and degrade gracefully: skip tagging for this account.
-          noTagAccounts.push(account);
-          await messenger.storage.local.set({ noTagAccounts });
-          batch.skippedNotes.push(`#${item.idx} ${item.subject || ''} · ${t('tagUnsupportedNote')}`);
-          return;
-        }
         throw new Error(`Tag not applied: ${missing.join(', ')}`);
       }
       const defs = await messenger.messages.tags.list();
@@ -383,6 +377,17 @@ async function applyReview(items) {
   for (const { item, reason } of failed.filter(e => e.attempts >= MAX_ATTEMPTS)) {
     batch.fail += 1;
     batch.failDetails.push({ n: item.idx, subject: item.subject || '', reason });
+    // Transient write failures happen (network hiccups, throttling); only
+    // degrade an account after several independent failed messages.
+    if (item.accountId && /Tag not applied/.test(reason)) {
+      noTagFailures[item.accountId] = (noTagFailures[item.accountId] || 0) + 1;
+      await messenger.storage.local.set({ noTagFailures });
+      if (noTagFailures[item.accountId] >= 3 && !noTagAccounts.includes(item.accountId)) {
+        noTagAccounts.push(item.accountId);
+        await messenger.storage.local.set({ noTagAccounts });
+        batch.skippedNotes.push(`${t('tagUnsupportedNote')} (${item.accountId})`);
+      }
+    }
     try {
       await sleep(IMAP_DELAY);
       const details = await withTimeout(messenger.messages.get(item.id), IMAP_TIMEOUT, "Fail-tag read");

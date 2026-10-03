@@ -79,6 +79,7 @@ function applyStaticTexts() {
   $('btn-import-tags').textContent = t('importTags');
   $('btn-export-tags').textContent = t('exportTags');
   $('btn-diagnose').textContent = t('diagnoseTags');
+  $('btn-reset-degrade').textContent = t('resetDegrade');
 }
 
 // ---------- 语言切换 ----------
@@ -626,9 +627,11 @@ async function copyDiagnosis() {
   const { tagKeys } = await messenger.storage.local.get({ tagKeys: {} });
   const tbTags = await messenger.messages.tags.list();
   const { noTagAccounts = [] } = await messenger.storage.local.get({ noTagAccounts: [] });
+  const { noTagFailures = {} } = await messenger.storage.local.get({ noTagFailures: {} });
   const lines = [
     '[Email Assistant tag diagnosis]',
     `accounts with tagging auto-skipped: ${noTagAccounts.length ? noTagAccounts.join(', ') : '(none)'}`,
+    `tag write failure counts: ${Object.keys(noTagFailures).length ? Object.entries(noTagFailures).map(([k, v]) => k + ':' + v).join(' ') : '(none)'}`,
     `version: ${manifest.version}`,
     `language: ${currentLang}`,
     '',
@@ -765,6 +768,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('add-first-tag-btn').addEventListener('click', () => openTagModal(-1));
   $('btn-export-tags').addEventListener('click', exportTags);
   $('btn-diagnose').addEventListener('click', copyDiagnosis);
+  $('btn-reset-degrade').addEventListener('click', async () => {
+    await messenger.storage.local.set({ noTagAccounts: [], noTagFailures: {} });
+    showToast('success', t('resetDegradeDone'));
+  });
   $('btn-import-tags').addEventListener('click', () => $('import-tags-file').click());
   $('import-tags-file').addEventListener('change', async (e) => {
     const file = e.target.files && e.target.files[0];

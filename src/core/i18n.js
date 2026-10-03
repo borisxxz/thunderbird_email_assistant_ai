@@ -75,6 +75,8 @@ export const MESSAGES = {
     diagnoseTags: 'Diagnose',
     diagnoseCopied: 'Diagnosis copied to clipboard — paste it back to whoever is debugging.',
     diagnoseFailed: 'Could not copy: {message}',
+    resetDegrade: 'Reset tagging degrade list',
+    resetDegradeDone: 'Reset — all accounts will be tagged again.',
 
     // Popup
     popupSelected: '{count} message(s) selected',
@@ -231,6 +233,8 @@ export const MESSAGES = {
     diagnoseTags: '诊断',
     diagnoseCopied: '诊断信息已复制到剪贴板——直接粘贴发给调试的人即可。',
     diagnoseFailed: '复制失败：{message}',
+    resetDegrade: '重置打标降级名单',
+    resetDegradeDone: '已重置——所有账户恢复打标。',
 
     popupSelected: '已选中 {count} 封邮件',
     popupIdleDesc: '将使用当前标签配置，对选中邮件逐封分析并打标。',
