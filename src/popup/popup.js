@@ -291,11 +291,14 @@ async function poll() {
 async function scanSelectionHere() {
   // The panel runs in its own window; scan the mail window it was opened
   // from (?win=…). currentWindow would be the panel itself — always empty.
+  // The panel tab itself is the active tab of its window once opened, so
+  // never filter mail tabs by "active" — take the mail tabs of the origin
+  // window directly.
   const originWindow = Number(new URLSearchParams(location.search).get('win'));
   let tabs = Number.isFinite(originWindow) && originWindow > 0
-    ? await messenger.mailTabs.query({ active: true, windowId: originWindow })
-    : await messenger.mailTabs.query({ active: true });
-  if (!tabs.length) tabs = await messenger.mailTabs.query({ active: true });
+    ? await messenger.mailTabs.query({ windowId: originWindow })
+    : await messenger.mailTabs.query({});
+  if (!tabs.length) tabs = await messenger.mailTabs.query({});
   if (!tabs.length) return [];
 
   const list = await messenger.mailTabs.getSelectedMessages(tabs[0].id);
