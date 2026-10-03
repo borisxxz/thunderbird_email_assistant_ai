@@ -3,7 +3,7 @@
 **[English](./README.en.md)** | 中文
 
 ![Thunderbird](https://img.shields.io/badge/Thunderbird-102%2B-%230F8FF?logo=thunderbird&logoColor=white)
-![Version](https://img.shields.io/badge/version-0.0.17-indigo)
+![Version](https://img.shields.io/badge/version-0.0.18-indigo)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![CI](https://img.shields.io/badge/CI-GitHub%20Actions%20%2B%20CNB-blue)
 

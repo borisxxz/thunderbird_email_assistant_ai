@@ -173,6 +173,26 @@ function moveTargetFor(item, catalog) {
   return null;
 }
 
+
+const IMAP_TIMEOUT = 30000; // a hung IMAP call must not wedge the whole batch
+const withTimeout = (p, ms, what) => Promise.race([
+  p,
+  new Promise((_, reject) => {
+    const iv = setInterval(() => {
+      if (batch.cancelRequested) { clearInterval(iv); reject(new Error(`${what} cancelled`)); }
+    }, 100);
+    setTimeout(() => { clearInterval(iv); reject(new Error(`${what} timed out (${ms / 1000}s)`)); }, ms);
+  })
+]);
+// Cancelling during a delay takes effect immediately, not after the wait.
+const sleepOrCancel = async (ms) => {
+  let waited = 0;
+  while (waited < ms && !batch.cancelRequested) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    waited += 100;
+  }
+};
+
 // Per apply run: cache auto-created tag folders so each tag+account creates once.
 const autoFolderCache = new Map();
 
@@ -227,6 +247,28 @@ async function ensureTagDefinitions(keys, catalog) {
   }
 }
 
+// After a move the message gets a new id; find it via its Message-ID header
+// and rewrite the tags there (servers may drop keywords during IMAP MOVE).
+async function reapplyTagsAtDestination(item, hmid, destId) {
+  if (!hmid || !item.tags || !item.tags.length) return;
+  try {
+    const found = await withTimeout(
+      messenger.messages.query({ folder: destId, headerMessageId: hmid }),
+      10000, 'Relocate query');
+    const list = found && found.messages;
+    if (!list || !list.length) return;
+    const fresh = await withTimeout(messenger.messages.get(list[0].id), 10000, 'Relocate read');
+    const want = new Set([...(fresh.tags || []), ...item.tags]);
+    const have = new Set(fresh.tags || []);
+    let missing = [...want].filter(k => !have.has(k));
+    if (!missing.length) return;
+    await withTimeout(messenger.messages.update(list[0].id, { tags: Array.from(want) }), 10000, 'Relocate tag write');
+    console.log(`Email Assistant: re-applied tags after move: ${missing.join(', ')}`);
+  } catch (error) {
+    console.warn('Email Assistant: post-move tag re-apply skipped:', error.message || error);
+  }
+}
+
 async function applyReview(items) {
   const { batchAction, maxAttempts } = await messenger.storage.local.get({
     batchAction: DEFAULTS.batchAction,
@@ -251,24 +293,7 @@ async function applyReview(items) {
   autoFolderCache.clear();
   await ensureTagDefinitions([...new Set(items.flatMap(i => i.tags || []))], batch.catalog);
 
-  const IMAP_TIMEOUT = 30000; // a hung IMAP call must not wedge the whole batch
-  const withTimeout = (p, ms, what) => Promise.race([
-    p,
-    new Promise((_, reject) => {
-      const iv = setInterval(() => {
-        if (batch.cancelRequested) { clearInterval(iv); reject(new Error(`${what} cancelled`)); }
-      }, 100);
-      setTimeout(() => { clearInterval(iv); reject(new Error(`${what} timed out (${ms / 1000}s)`)); }, ms);
-    })
-  ]);
-  // Cancelling during a delay takes effect immediately, not after the wait.
-  const sleep = async (ms) => {
-    let waited = 0;
-    while (waited < ms && !batch.cancelRequested) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      waited += 100;
-    }
-  };
+  const sleep = sleepOrCancel;
   const IMAP_DELAY = 500; // breathing room around IMAP operations
 
   // A message id becomes invalid once the message has been moved.
@@ -282,7 +307,7 @@ async function applyReview(items) {
   };
 
   const applyOne = async (item) => {
-    if (doTag) {
+    if (doTag && !item.tagApplied) {
       const details0 = await withTimeout(messenger.messages.get(item.id), IMAP_TIMEOUT, "Tag read");
       const account = details0.accountId || (details0.folder && details0.folder.accountId);
       if (account) item.accountId = account;
@@ -317,12 +342,18 @@ async function applyReview(items) {
       if (undefinedKeys.length) {
         throw new Error(`Tag key has no definition: ${undefinedKeys.join(', ')}`);
       }
+      item.tagApplied = true; // retries must not tag again — the move loop owns them now
       await sleep(IMAP_DELAY);
     }
     if (doMove) {
       const target = moveTargetFor(item, batch.catalog);
       if (target) {
         const destId = target.folderAuto ? await withTimeout(autoFolderIdFor(item, target), IMAP_TIMEOUT, "Folder resolve") : target.folderId;
+        let hmid = item.hmid;
+        if (!hmid) {
+          const src = await withTimeout(messenger.messages.get(item.id), IMAP_TIMEOUT, "Pre-move read");
+          hmid = item.hmid = src.headerMessageId || src.headers && src.headers['message-id'] && src.headers['message-id'][0];
+        }
         await sleep(IMAP_DELAY);
         try {
           await withTimeout(messenger.messages.move([item.id], destId), IMAP_TIMEOUT, "Move");
@@ -330,9 +361,12 @@ async function applyReview(items) {
           // Some servers move the message but still report an error (timeouts);
           // a vanished id means the move actually happened — don't fail (and
           // don't retry against a dead id, which would also drop the tags).
-          if (await messageGone(item.id)) return;
+          if (await messageGone(item.id)) { await reapplyTagsAtDestination(item, hmid, destId); batch.moved += 1; return; }
           throw error;
         }
+        // IMAP MOVE may drop custom keywords server-side; re-apply the tags
+        // at the destination (best effort, once).
+        await reapplyTagsAtDestination(item, hmid, destId);
         await sleep(IMAP_DELAY);
         batch.moved += 1;
       } else if (!doTag) {
