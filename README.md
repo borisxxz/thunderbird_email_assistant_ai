@@ -60,25 +60,45 @@
 
 1. 创建 CNB 访问令牌：[cnb.cool](https://cnb.cool) → 头像 → 设置 → **个人访问令牌** → 新建（勾选仓库写权限）
 2. 添加到 GitHub 仓库密钥：仓库 **Settings → Secrets and variables → Actions → New repository secret**，Name 填 `CNB_TOKEN`，Value 填令牌
-
-### 日常发布（只需推一个 tag）
+3. 确认 `github` remote 使用 SSH（本机全局 git 配置会把 GitHub HTTPS 重写到镜像，HTTPS 推送会失败）：
 
 ```bash
-# 1. 同步修改 manifest.json 与 package.json 的 version（例如 0.0.2）
-git add -A && git commit -m "release 0.0.2"
-
-# 2. 打 tag 并推送
-git tag v0.0.2
-git push github main v0.0.2
+git remote set-url github git@github.com:borisxxz/thunderbird_email_assistant_ai.git
 ```
 
-推送 tag 后自动完成（无需其他操作）：
+### 日常发布（检查清单）
 
-1. **GitHub Actions** 构建 → GitHub Release（zip 附件）
-2. 自动镜像代码与 tag 到 **CNB** → CNB `tag_push` 流水线构建 → CNB Release（zip 附件）
+1. 同步修改 `manifest.json` 与 `package.json` 的 `version`
+2. 在 `src/core/changelog.js` 为该版本添加中英文更新说明——用户更新完成后会看到
+3. `npm run build` 本地验证产物（`web-ext-artifacts/`）
+4. 提交、打 tag、分别推送两个远端
 
-> 国内网络推送 GitHub 失败时加代理：`git -c http.proxy=http://127.0.0.1:7897 push github main v0.0.2`
->
+```bash
+git add -A && git commit -m "v0.0.27: ..."
+git tag -a v0.0.27 -m "v0.0.27"
+
+git push origin main v0.0.27                                          # CNB
+GIT_SSH_COMMAND="ssh -o BatchMode=yes" git push github main v0.0.27   # GitHub（SSH）
+```
+
+推送 tag 后自动完成：
+
+1. **GitHub Actions** 构建 → GitHub Release（zip、`-github.xpi`、`-cnb.xpi`、`updates.json`）
+2. 代码与 tag 镜像到 **CNB** → CNB `tag_push` 流水线构建 → CNB Release（`-cnb.xpi` / `-cnb.zip`）
+3. CNB `main` 上的 `updates-cnb.json` 同步指向新版本
+
+### 双渠道自动更新
+
+| 渠道 | 安装包 | 更新源 | 适用 |
+|---|---|---|---|
+| **CNB** | `email_assistant-*-cnb.xpi` | `updates-cnb.json`（CNB main raw） | 国内用户 |
+| **GitHub** | `email_assistant-*.zip` / `-github.xpi` | `releases/latest/download/updates.json` | 国外用户 |
+
+- 用户安装哪个渠道的包，就固定走哪个渠道检查更新（Thunderbird 不会按 IP 分流）
+- **更新完成后**，扩展启动时比较版本号，自动弹出一次更新说明窗口；内容来自 `src/core/changelog.js`，每个版本只弹一次，全新安装也会看到一次欢迎说明
+- 通过 `Load Temporary Add-on` 临时加载的实例不参与自动更新，需正式安装 xpi
+- 发布后验证：两个更新清单的 `version` 都等于新版本，且两个 Release 的 xpi 均可下载
+
 > 手动本地构建：`npm run build` → `web-ext-artifacts/`
 
 ## 开发

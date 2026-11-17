@@ -58,25 +58,45 @@ Batch processing supports three action modes: **tag only / tag + move / move onl
 
 1. Create a CNB access token: [cnb.cool](https://cnb.cool) → avatar → Settings → **Personal access tokens** → new token (repo write access)
 2. Add it to GitHub secrets: repo **Settings → Secrets and variables → Actions → New repository secret**, name `CNB_TOKEN`, value = the token
-
-### Routine release (just push a tag)
+3. Make sure the `github` remote uses SSH (a global git `insteadOf` rewrite may redirect GitHub HTTPS to a mirror, which breaks pushes):
 
 ```bash
-# 1. Bump "version" in manifest.json AND package.json (e.g. 0.0.2)
-git add -A && git commit -m "release 0.0.2"
+git remote set-url github git@github.com:borisxxz/thunderbird_email_assistant_ai.git
+```
 
-# 2. Tag and push
-git tag v0.0.2
-git push github main v0.0.2
+### Routine release (checklist)
+
+1. Bump `version` in `manifest.json` AND `package.json`
+2. Add bilingual release notes for this version in `src/core/changelog.js` — users see them after updating
+3. Verify the package locally with `npm run build` (`web-ext-artifacts/`)
+4. Commit, tag, and push to both remotes
+
+```bash
+git add -A && git commit -m "v0.0.27: ..."
+git tag -a v0.0.27 -m "v0.0.27"
+
+git push origin main v0.0.27                                          # CNB
+GIT_SSH_COMMAND="ssh -o BatchMode=yes" git push github main v0.0.27   # GitHub over SSH
 ```
 
 Pushing the tag then does everything automatically:
 
-1. **GitHub Actions** builds → GitHub Release (zip asset)
-2. Code + tag are mirrored to **CNB** → CNB `tag_push` pipeline builds → CNB Release (zip asset)
+1. **GitHub Actions** builds → GitHub Release (zip, `-github.xpi`, `-cnb.xpi`, `updates.json`)
+2. Code + tag are mirrored to **CNB** → CNB `tag_push` pipeline builds → CNB Release (`-cnb.xpi` / `-cnb.zip`)
+3. `updates-cnb.json` on CNB `main` is updated to the new version
 
-> Behind a firewall? `git -c http.proxy=http://127.0.0.1:7897 push github main v0.0.2`
->
+### Two update channels
+
+| Channel | Package | Update source | For |
+|---|---|---|---|
+| **CNB** | `email_assistant-*-cnb.xpi` | `updates-cnb.json` (CNB raw main) | Users in China |
+| **GitHub** | `email_assistant-*.zip` / `-github.xpi` | `releases/latest/download/updates.json` | Users elsewhere |
+
+- The channel is fixed by the package the user installed (Thunderbird does not route by IP)
+- **After an update completes**, the extension compares versions at startup and opens a one-time "What's new" window; notes come from `src/core/changelog.js`, shown once per version (fresh installs get a one-time welcome note)
+- Instances loaded via `Load Temporary Add-on` never check for updates; install the xpi permanently to test the update path
+- After publishing, verify both update manifests report the new version and both releases serve their xpi
+
 > Local build: `npm run build` → `web-ext-artifacts/`
 
 ## Development
