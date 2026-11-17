@@ -21,7 +21,12 @@ export async function initVersionTracking() {
   const { lastSeenVersion } = await messenger.storage.local.get({ lastSeenVersion: null });
   // Persist first so a crash while the window opens cannot loop the popup.
   await messenger.storage.local.set({ lastSeenVersion: current });
-  if (!lastSeenVersion) return null; // fresh install: nothing to announce
+  if (!lastSeenVersion) {
+    // No marker: either a brand-new install or an upgrade from a version that
+    // did not track versions (<= 0.0.25). Show the notes once either way — a
+    // one-time "what's new" on first install is standard welcome behavior.
+    return { previous: null, current };
+  }
   return isNewerVersion(current, lastSeenVersion)
     ? { previous: lastSeenVersion, current }
     : null;

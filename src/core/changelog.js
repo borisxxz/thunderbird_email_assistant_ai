@@ -1,6 +1,16 @@
 // Release notes shown once after an upgrade. Add an entry for each version;
 // the changelog window reads the entry matching the running manifest version.
 export const CHANGELOG = {
+  '0.0.26': {
+    en: [
+      'After every future update, a release-notes window will appear once automatically — including this update.',
+      'Includes all fixes from v0.0.24: reliable batch processing and cancellation, a working Gemini provider, an unclipped tag-selection menu and accurate result counts.'
+    ],
+    'zh-CN': [
+      '从本次更新起，每次更新完成后会自动弹出一次更新说明窗口。',
+      '包含 v0.0.24 的全部修复：批量处理与取消更可靠、Gemini 可用、标签菜单不再被裁切、结果统计更准确。'
+    ]
+  },
   '0.0.25': {
     en: [
       'Release notes now appear once after each update — including this one.',

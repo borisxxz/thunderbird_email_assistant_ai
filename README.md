@@ -3,7 +3,7 @@
 **[English](./README.en.md)** | 中文
 
 ![Thunderbird](https://img.shields.io/badge/Thunderbird-121%2B-%230F8FF?logo=thunderbird&logoColor=white)
-![Version](https://img.shields.io/badge/version-0.0.25-indigo)
+![Version](https://img.shields.io/badge/version-0.0.26-indigo)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![CI](https://img.shields.io/badge/CI-GitHub%20Actions%20%2B%20CNB-blue)
 
@@ -42,7 +42,7 @@
 
 ## 安装
 
-1. 从 [Releases](https://github.com/borisxxz/thunderbird_email_assistant_ai/releases)（或 [CNB 镜像](https://cnb.cool/boris007/thunderbird_email_assistant_ai)）下载 `email_assistant-0.0.25.zip`
+1. 从 [Releases](https://github.com/borisxxz/thunderbird_email_assistant_ai/releases)（或 [CNB 镜像](https://cnb.cool/boris007/thunderbird_email_assistant_ai)）下载 `email_assistant-0.0.26.zip`
 2. Thunderbird → `工具 → 附加组件和主题` → 齿轮 → **调试附加组件** → **Load Temporary Add-on…** → 选择 zip
 
 > 临时加载重启 Thunderbird 后失效；升级时先 Remove 旧版再加载新版。
