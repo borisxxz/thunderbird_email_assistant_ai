@@ -3,7 +3,7 @@
 English | **[中文](./README.md)**
 
 ![Thunderbird](https://img.shields.io/badge/Thunderbird-121%2B-%230F8FF?logo=thunderbird&logoColor=white)
-![Version](https://img.shields.io/badge/version-0.0.24-indigo)
+![Version](https://img.shields.io/badge/version-0.0.25-indigo)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![CI](https://img.shields.io/badge/CI-GitHub%20Actions%20%2B%20CNB-blue)
 
@@ -40,7 +40,7 @@ Batch processing supports three action modes: **tag only / tag + move / move onl
 
 ## Install
 
-1. Download `email_assistant-0.0.24.zip` from [Releases](https://github.com/borisxxz/thunderbird_email_assistant_ai/releases) (or the [CNB mirror](https://cnb.cool/boris007/thunderbird_email_assistant_ai))
+1. Download `email_assistant-0.0.25.zip` from [Releases](https://github.com/borisxxz/thunderbird_email_assistant_ai/releases) (or the [CNB mirror](https://cnb.cool/boris007/thunderbird_email_assistant_ai))
 2. Thunderbird → `Tools → Add-ons and Themes` → gear → **Debug Add-ons** → **Load Temporary Add-on…** → pick the zip
 
 > Temporary add-ons are removed on Thunderbird restart; Remove the old version before loading an update.

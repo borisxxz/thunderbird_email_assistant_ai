@@ -172,6 +172,12 @@ export const MESSAGES = {
     testFailed: 'Connection failed: {message}',
     testHint: 'The server could not be reached — check that it is running at this address.',
     customHostWarning: 'Custom host {host} is in use. Email content and your API key may be sent to this third party instead of {official}.',
+
+    // What's new (shown once after an update)
+    whatsNewTitle: "What's new",
+    whatsNewVersion: 'Updated to version {version}',
+    whatsNewFallback: 'This update contains bug fixes and stability improvements.',
+    whatsNewOk: 'Got it',
   },
 
   'zh-CN': {
@@ -336,6 +342,12 @@ export const MESSAGES = {
     testFailed: '连接失败：{message}',
     testHint: '无法连接服务器——请确认服务正在该地址运行。',
     customHostWarning: '当前使用自定义主机 {host}。邮件内容与 API Key 可能会被发送到该第三方，而非 {official}。',
+
+    // 更新说明（更新后显示一次）
+    whatsNewTitle: '更新说明',
+    whatsNewVersion: '已更新到版本 {version}',
+    whatsNewFallback: '本次更新包含缺陷修复与稳定性改进。',
+    whatsNewOk: '知道了',
   }
 };
 

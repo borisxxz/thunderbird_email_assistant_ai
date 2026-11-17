@@ -3,6 +3,7 @@ import { armAbort, triggerAbort } from './providers/utils.js';
 import { DEFAULTS, FAILED_TAG } from './core/config.js';
 import { ensureTagsExist } from './core/tags.js';
 import { getLanguage, t } from './core/i18n.js';
+import { initVersionTracking } from './core/updates.js';
 
 console.log("Email Assistant: Background script loaded.");
 
@@ -681,4 +682,17 @@ messenger.runtime.onMessage.addListener((msg) => {
 // --- Initialize ---
 // Wait for migration before batches can start; tagKeys must be ready.
 tagsReady = ensureTagsExist().catch(err => console.error('Email Assistant: tag init failed:', err));
+
+// Show the release notes once after an actual version increase.
+initVersionTracking()
+  .then(upgrade => {
+    if (!upgrade) return;
+    return messenger.windows.create({
+      type: 'popup',
+      url: messenger.runtime.getURL('changelog.html'),
+      width: 460,
+      height: 540
+    });
+  })
+  .catch(err => console.error('Email Assistant: version tracking failed:', err));
 // ea.tags.ensure from other contexts must wait for the initial migration too.
