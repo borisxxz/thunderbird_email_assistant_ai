@@ -2,8 +2,8 @@
 
 English | **[中文](./README.md)**
 
-![Thunderbird](https://img.shields.io/badge/Thunderbird-102%2B-%230F8FF?logo=thunderbird&logoColor=white)
-![Version](https://img.shields.io/badge/version-0.0.1-indigo)
+![Thunderbird](https://img.shields.io/badge/Thunderbird-121%2B-%230F8FF?logo=thunderbird&logoColor=white)
+![Version](https://img.shields.io/badge/version-0.0.24-indigo)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![CI](https://img.shields.io/badge/CI-GitHub%20Actions%20%2B%20CNB-blue)
 
@@ -34,13 +34,13 @@ Batch processing supports three action modes: **tag only / tag + move / move onl
 
 - **Bilingual UI (中文 / English)** — one-click toggle in settings, summaries follow
 - **Custom tags** — name / key / color / prompt with live validation; tags named exactly like existing Thunderbird tags are **reused automatically**; **JSON import & export**
-- **7 LLM providers** — Custom gateway (default), Ollama (local), OpenAI (current Responses API), Google Gemini, Anthropic Claude, Mistral, DeepSeek, Custom (any OpenAI-compatible gateway, optional API key)
+- **7 LLM providers** — Custom gateway (default, optional API key), Ollama (local), OpenAI (Responses API), Google Gemini, Anthropic Claude, Mistral, DeepSeek
 - **Custom endpoints** — any Base URL (scheme + host + port) and model per provider; point at local gateways like `http://127.0.0.1:8080/v1`; built-in "Fetch Models", "Test Connection" and a live full-endpoint preview
 - **Advanced settings** — concurrency (1–8), temperature, max tokens, retry attempts (1–10)
 
 ## Install
 
-1. Download `email_assistant-0.0.1.zip` from [Releases](https://github.com/borisxxz/thunderbird_email_assistant_ai/releases) (or the [CNB mirror](https://cnb.cool/boris007/thunderbird_email_assistant_ai))
+1. Download `email_assistant-0.0.24.zip` from [Releases](https://github.com/borisxxz/thunderbird_email_assistant_ai/releases) (or the [CNB mirror](https://cnb.cool/boris007/thunderbird_email_assistant_ai))
 2. Thunderbird → `Tools → Add-ons and Themes` → gear → **Debug Add-ons** → **Load Temporary Add-on…** → pick the zip
 
 > Temporary add-ons are removed on Thunderbird restart; Remove the old version before loading an update.

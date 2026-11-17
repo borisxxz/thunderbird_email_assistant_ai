@@ -18,22 +18,27 @@ function notifyBasic(text) {
 // Toolbar button opens the batch panel as a tab inside the Thunderbird
 // window it was clicked in: it stays visible when the user switches apps
 // (unlike a popup) and lives inside Thunderbird (unlike a separate window).
-let batchTabId = null;
+// One panel per window; ?win= binds each panel to its source window.
+const panelByWindow = new Map();
 
 messenger.browserAction.onClicked.addListener(async (tab) => {
-  try {
-    const existing = await messenger.tabs.query({ url: messenger.runtime.getURL('popup.html') + '*' });
-    if (existing.length) {
-      await messenger.tabs.update(existing[0].id, { active: true });
-      return;
-    }
-  } catch { /* fall through and create */ }
+  const winId = tab.windowId;
+  const existingId = panelByWindow.get(winId);
+  if (existingId) {
+    try {
+      const t = await messenger.tabs.get(existingId);
+      if (t) { await messenger.tabs.update(existingId, { active: true }); return; }
+    } catch { /* stale id — create a new panel below */ }
+  }
   const created = await messenger.tabs.create({
-    url: messenger.runtime.getURL(`popup.html?win=${tab.windowId}`),
-    windowId: tab.windowId,
+    url: messenger.runtime.getURL(`popup.html?win=${winId}`),
+    windowId: winId,
     active: true
   });
-  batchTabId = created.id;
+  panelByWindow.set(winId, created.id);
+});
+messenger.tabs.onRemoved.addListener((tabId) => {
+  for (const [win, id] of panelByWindow) if (id === tabId) panelByWindow.delete(win);
 });
 
 // Button in the message display toolbar: summarize the currently displayed message.
@@ -55,18 +60,25 @@ async function openSummaryWindow(messageId) {
   });
 }
 
-// --- Batch tagging state machine (driven by the toolbar popup) ---
+// --- Batch tagging state machine (driven by the toolbar panel) ---
 // idle → analyzing → reviewing → applying → done/cancelled/error
-let batch = {
-  phase: 'idle',
-  current: 0, total: 0, ok: 0, fail: 0, moved: 0,
-  lastSubject: '', lastError: null,
-  failDetails: [],
-  cancelRequested: false,
-  consecutiveFails: 0,
-  reviewItems: [],
-  catalog: {}
-};
+function freshBatch(overrides = {}) {
+  return {
+    phase: 'idle',
+    current: 0, total: 0, ok: 0, fail: 0, moved: 0,
+    analysisFailed: 0,
+    lastSubject: '', lastError: null,
+    failDetails: [], skippedNotes: [],
+    cancelRequested: false,
+    consecutiveFails: 0,
+    reviewItems: [],
+    catalog: {},
+    ...overrides
+  };
+}
+let batch = freshBatch();
+let runningPromise = null; // non-null while analyze/apply workers are alive
+let tagsReady = null;      // resolves when initial tag migration finishes
 
 function batchStatus() {
   return {
@@ -76,6 +88,7 @@ function batchStatus() {
     ok: batch.ok,
     fail: batch.fail,
     moved: batch.moved,
+    analysisFailed: batch.analysisFailed,
     lastSubject: batch.lastSubject,
     lastError: batch.lastError,
     failDetails: batch.failDetails.slice(0, 8),
@@ -92,7 +105,9 @@ async function tagCatalog() {
     tagKeys: {}
   });
   const catalog = {};
-  catalog[keyMap[FAILED_TAG.key] || FAILED_TAG.key] = { name: t('failedTagName'), color: FAILED_TAG.color, moveNone: true };
+  catalog[keyMap[FAILED_TAG.key] || FAILED_TAG.key] = {
+    name: t('failedTagName'), color: FAILED_TAG.color, moveNone: true, reserved: true
+  };
   for (const tag of customTags) {
     const entry = { name: tag.name, color: tag.color };
     const folder = tag.folder || 'auto'; // legacy '' behaves like auto
@@ -121,28 +136,28 @@ async function batchConcurrency() {
 }
 
 async function runAnalysis(messages, notify) {
-  batch = {
+  const myBatch = freshBatch({
     phase: 'analyzing',
-    current: 0, total: messages.length, ok: 0, fail: 0,
-    lastSubject: '', lastError: null,
-    failDetails: [],
-    cancelRequested: false,
-    consecutiveFails: 0,
+    total: messages.length,
     reviewItems: messages.map(m => ({ id: m.id, subject: m.subject || '', author: m.author || '', tags: [], failed: null })),
     catalog: await tagCatalog()
-  };
+  });
+  batch = myBatch;
   if (notify) notifyBasic(t('notifyStart', { count: messages.length }));
   armAbort();
 
   const concurrency = await batchConcurrency();
   let next = 0;
+  const results = new Array(messages.length).fill(null);
+  let failuresInOrder = 0;
+  let stopped = false;
   const worker = async () => {
-    while (!batch.cancelRequested && batch.phase === 'analyzing') {
+    while (!myBatch.cancelRequested && myBatch.phase === 'analyzing') {
       const i = next++;
       if (i >= messages.length) break;
       const m = messages[i];
-      const item = batch.reviewItems[i];
-      batch.lastSubject = m.subject || '';
+      const item = myBatch.reviewItems[i];
+      myBatch.lastSubject = m.subject || '';
 
       let reason = null;
       try {
@@ -150,25 +165,40 @@ async function runAnalysis(messages, notify) {
         if (result) item.tags = [...result.tagKeys];
         else reason = 'LLM analysis failed';
       } catch (error) {
-        if (batch.cancelRequested) break; // aborted on purpose — not a failure
-        console.error("Email Assistant: Batch error for message ID:", m.id, error);
         reason = String(error.message || error).slice(0, 120);
       }
 
-      batch.current += 1;
+      if (myBatch.cancelRequested) break; // cancelled requests are not failures
+      results[i] = reason ? 'fail' : 'ok';
+      myBatch.current += 1;
       if (!reason) {
-        batch.ok += 1;
-        batch.consecutiveFails = 0;
+        myBatch.ok += 1;
       } else {
         item.failed = reason;
-        batch.fail += 1;
-        batch.consecutiveFails += 1;
-        batch.failDetails.push({ n: i + 1, subject: m.subject || '', reason });
+        myBatch.fail += 1;
+        myBatch.analysisFailed += 1;
+        myBatch.failDetails.push({ n: i + 1, subject: m.subject || '', reason });
       }
 
-      if (batch.consecutiveFails >= 3) {
-        batch.phase = 'error';
-        batch.lastError = reason;
+      // Evaluate consecutive failures in message order, not completion order.
+      // Scan the known prefix: a success resets the run, an unknown (pending)
+      // slot stops the scan — a later success there could break the run.
+      let run = 0;
+      for (let j = 0; j < results.length; j++) {
+        if (!results[j]) break;
+        if (results[j] === 'fail') {
+          run += 1;
+          if (run >= 3) break;
+        } else {
+          run = 0;
+        }
+      }
+      failuresInOrder = run;
+      myBatch.consecutiveFails = run;
+      if (run >= 3) {
+        myBatch.phase = 'error';
+        myBatch.lastError = reason;
+        stopped = true;
         console.error("Email Assistant: Batch aborted after 3 consecutive failures.");
         break;
       }
@@ -176,13 +206,14 @@ async function runAnalysis(messages, notify) {
   };
   await Promise.all(Array.from({ length: Math.min(concurrency, messages.length) }, worker));
 
-  if (batch.phase === 'analyzing') {
-    batch.phase = batch.cancelRequested ? 'cancelled' : 'reviewing';
-    if (batch.phase === 'reviewing' && notify) {
-      notifyBasic(t('notifyReviewReady', { count: batch.ok }));
+  if (myBatch.phase === 'analyzing') {
+    myBatch.phase = myBatch.cancelRequested ? 'cancelled' : 'reviewing';
+    if (myBatch.phase === 'reviewing' && notify) {
+      notifyBasic(t('notifyReviewReady', { count: myBatch.ok }));
     }
   }
-  console.log(`Email Assistant: Analysis ${batch.phase} — ok: ${batch.ok}, fail: ${batch.fail}`);
+  myBatch.analysisFailDetails = myBatch.failDetails.slice();
+  console.log(`Email Assistant: Analysis ${myBatch.phase} — ok: ${myBatch.ok}, fail: ${myBatch.fail}${stopped ? ', stopped early' : ''}`);
 }
 
 // First tag of the message (in tag-definition order) that has a move target.
@@ -194,17 +225,24 @@ function moveTargetFor(item, catalog) {
   return null;
 }
 
-
 const IMAP_TIMEOUT = 30000; // a hung IMAP call must not wedge the whole batch
-const withTimeout = (p, ms, what) => Promise.race([
-  p,
-  new Promise((_, reject) => {
-    const iv = setInterval(() => {
-      if (batch.cancelRequested) { clearInterval(iv); reject(new Error(`${what} cancelled`)); }
-    }, 100);
-    setTimeout(() => { clearInterval(iv); reject(new Error(`${what} timed out (${ms / 1000}s)`)); }, ms);
-  })
-]);
+const withTimeout = (p, ms, what) => {
+  let interval = null;
+  let timer = null;
+  const cleanup = () => {
+    if (interval) { clearInterval(interval); interval = null; }
+    if (timer) { clearTimeout(timer); timer = null; }
+  };
+  return Promise.race([
+    Promise.resolve(p).finally(cleanup),
+    new Promise((_, reject) => {
+      interval = setInterval(() => {
+        if (batch.cancelRequested) { cleanup(); reject(new Error(`${what} cancelled`)); }
+      }, 100);
+      timer = setTimeout(() => { cleanup(); reject(new Error(`${what} timed out (${ms / 1000}s)`)); }, ms);
+    })
+  ]);
+};
 // Cancelling during a delay takes effect immediately, not after the wait.
 const sleepOrCancel = async (ms) => {
   let waited = 0;
@@ -250,8 +288,6 @@ async function autoFolderIdFor(item, meta) {
 }
 
 // Thunderbird only renders tags whose key exists in its tag registry.
-// If a mapped key lost its definition (migration accidents, manual edits),
-// recreate it on the fly so tags are always visible after applying.
 async function ensureTagDefinitions(keys, catalog) {
   const all = await messenger.messages.tags.list();
   const known = new Set(all.map(x => x.key));
@@ -281,7 +317,7 @@ async function reapplyTagsAtDestination(item, hmid, destId) {
     const fresh = await withTimeout(messenger.messages.get(list[0].id), 10000, 'Relocate read');
     const want = new Set([...(fresh.tags || []), ...item.tags]);
     const have = new Set(fresh.tags || []);
-    let missing = [...want].filter(k => !have.has(k));
+    const missing = [...want].filter(k => !have.has(k));
     if (!missing.length) return;
     await withTimeout(messenger.messages.update(list[0].id, { tags: Array.from(want) }), 10000, 'Relocate tag write');
     console.log(`Email Assistant: re-applied tags after move: ${missing.join(', ')}`);
@@ -290,7 +326,10 @@ async function reapplyTagsAtDestination(item, hmid, destId) {
   }
 }
 
-async function applyReview(items) {
+const CANCELLED = Symbol('cancelled');
+const checkCancel = () => { if (batch.cancelRequested) throw CANCELLED; };
+
+async function applyReview(items, analysisStats = null) {
   const { batchAction, maxAttempts } = await messenger.storage.local.get({
     batchAction: DEFAULTS.batchAction,
     maxAttempts: DEFAULTS.maxAttempts
@@ -301,9 +340,8 @@ async function applyReview(items) {
   const { noTagAccounts = [] } = await messenger.storage.local.get({ noTagAccounts: [] });
 
   // Built-in known-bad servers: QQ/Tencent mail and Gmail accept keyword
-  // STOREs but silently drop them, so tags vanish within seconds
-  // (bugzilla.mozilla.org/1516177). Skip tagging for them up front and
-  // archive by moving instead, with a clear reason shown to the user.
+  // STOREs but silently drop them. Tag-only mode cannot help these accounts,
+  // so treat it as a failure instead of a silent no-op.
   const NO_TAG_DOMAINS = [
     { suffix: 'qq.com', reasonKey: 'skipReasonQQ' },
     { suffix: 'vip.qq.com', reasonKey: 'skipReasonQQ' },
@@ -321,26 +359,25 @@ async function applyReview(items) {
       if (hit) builtinNoTag[a.id] = hit.reasonKey;
     }
   } catch { /* detection is best-effort */ }
-  const announcedSkip = new Set();
   const { tagKeys: failKeyMap } = await messenger.storage.local.get({ tagKeys: {} });
-  const FAIL_TAG = failKeyMap[FAILED_TAG.key] || FAILED_TAG.key;
+  const failTag = failKeyMap[FAILED_TAG.key] || FAILED_TAG.key;
   const MAX_ATTEMPTS = Math.min(10, Math.max(1, Number(maxAttempts) || DEFAULTS.maxAttempts));
 
-  batch = {
-    ...batch,
+  const myBatch = freshBatch({
     phase: 'applying',
-    current: 0, total: items.length, ok: 0, fail: 0, moved: 0, skippedNotes: [],
-    lastSubject: '', lastError: null,
-    failDetails: [],
-    cancelRequested: false
-  };
+    current: 0, total: items.length,
+    analysisFailed: analysisStats ? analysisStats.fail : 0,
+    failDetails: analysisStats ? [...analysisStats.failDetails] : [],
+    reviewItems: batch.reviewItems,
+    catalog: batch.catalog
+  });
+  batch = myBatch;
   autoFolderCache.clear();
-  await ensureTagDefinitions([...new Set(items.flatMap(i => i.tags || []))], batch.catalog);
+  await ensureTagDefinitions([...new Set(items.flatMap(i => i.tags || []))], myBatch.catalog);
 
   const sleep = sleepOrCancel;
   const IMAP_DELAY = 500; // breathing room around IMAP operations
 
-  // A message id becomes invalid once the message has been moved.
   const messageGone = async (id) => {
     try {
       await messenger.messages.get(id);
@@ -358,43 +395,49 @@ async function applyReview(items) {
       const builtinReason = account && builtinNoTag[account];
       const learnedSkip = account && noTagAccounts.includes(account);
       if (builtinReason || learnedSkip) {
-        // Tagging is skipped, but the move/archive below still runs.
-        // The reason is shown for every skipped message.
-        batch.skippedNotes.push(`#${item.idx} ${item.subject || ''} · ${accountEmail[account] || account} · ${t(builtinReason || 'tagUnsupportedNote')}`);
-        batch.lastSubject = t('tagSkippedLine', { subject: item.subject || '' });
+        if (!doMove) {
+          // No other action would touch this message — do not report success.
+          throw new Error(t(builtinReason || 'tagUnsupportedNote'));
+        }
+        // Move-only fallback still archives the message.
+        myBatch.skippedNotes.push(`#${item.idx} ${item.subject || ''} · ${accountEmail[account] || account} · ${t(builtinReason || 'tagUnsupportedNote')}`);
+        myBatch.lastSubject = t('tagSkippedLine', { subject: item.subject || '' });
       } else {
-      await sleep(IMAP_DELAY);
-      const details = details0;
-      const merged = new Set([...(details.tags || []), ...item.tags]);
-      await withTimeout(messenger.messages.update(item.id, { tags: Array.from(merged) }), IMAP_TIMEOUT, "Tag write");
-      // Verify the tags really landed. The write settles asynchronously in
-      // Thunderbird, so re-read after a pause and retry before failing —
-      // an immediate read can still see the stale pre-write state.
-      await sleep(IMAP_DELAY);
-      let missing = [];
-      let readBack = null;
-      for (let attempt = 0; attempt < 5; attempt++) {
-        const after = await withTimeout(messenger.messages.get(item.id), IMAP_TIMEOUT, "Verify read");
-        readBack = after.tags || [];
-        missing = item.tags.filter(key => !readBack.includes(key));
-        if (!missing.length) break;
-        await sleep(1000);
-      }
-      if (missing.length) {
-        throw new Error(`Tag not applied: ${missing.join(', ')} (read back: [${readBack.join(', ')}])`);
-      }
-      const defs = await messenger.messages.tags.list();
-      const defKeys = new Set(defs.map(x => x.key));
-      const undefinedKeys = item.tags.filter(key => !defKeys.has(key));
-      if (undefinedKeys.length) {
-        throw new Error(`Tag key has no definition: ${undefinedKeys.join(', ')}`);
-      }
-      item.tagApplied = true; // retries must not tag again — the move loop owns them now
-      await sleep(IMAP_DELAY);
+        await sleep(IMAP_DELAY);
+        checkCancel();
+        const details = details0;
+        const merged = new Set([...(details.tags || []), ...item.tags]);
+        await withTimeout(messenger.messages.update(item.id, { tags: Array.from(merged) }), IMAP_TIMEOUT, "Tag write");
+        // Verify the tags really landed. Thunderbird settles writes
+        // asynchronously, so re-read with retries before failing.
+        await sleep(IMAP_DELAY);
+        checkCancel();
+        let missing = [];
+        let readBack = null;
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const after = await withTimeout(messenger.messages.get(item.id), IMAP_TIMEOUT, "Verify read");
+          readBack = after.tags || [];
+          missing = item.tags.filter(key => !readBack.includes(key));
+          if (!missing.length) break;
+          await sleep(1000);
+          checkCancel();
+        }
+        if (missing.length) {
+          throw new Error(`Tag not applied: ${missing.join(', ')} (read back: [${readBack.join(', ')}])`);
+        }
+        const defs = await messenger.messages.tags.list();
+        const defKeys = new Set(defs.map(x => x.key));
+        const undefinedKeys = item.tags.filter(key => !defKeys.has(key));
+        if (undefinedKeys.length) {
+          throw new Error(`Tag key has no definition: ${undefinedKeys.join(', ')}`);
+        }
+        item.tagApplied = true; // retries must not tag again — the move loop owns them now
+        await sleep(IMAP_DELAY);
+        checkCancel();
       }
     }
     if (doMove) {
-      const target = moveTargetFor(item, batch.catalog);
+      const target = moveTargetFor(item, myBatch.catalog);
       if (target) {
         const destId = target.folderAuto ? await withTimeout(autoFolderIdFor(item, target), IMAP_TIMEOUT, "Folder resolve") : target.folderId;
         let hmid = item.hmid;
@@ -403,95 +446,120 @@ async function applyReview(items) {
           hmid = item.hmid = src.headerMessageId || src.headers && src.headers['message-id'] && src.headers['message-id'][0];
         }
         await sleep(IMAP_DELAY);
+        checkCancel();
         try {
           await withTimeout(messenger.messages.move([item.id], destId), IMAP_TIMEOUT, "Move");
         } catch (error) {
-          // Some servers move the message but still report an error (timeouts);
-          // a vanished id means the move actually happened — don't fail (and
-          // don't retry against a dead id, which would also drop the tags).
-          if (await messageGone(item.id)) { await reapplyTagsAtDestination(item, hmid, destId); batch.moved += 1; return; }
+          if (await messageGone(item.id)) { await reapplyTagsAtDestination(item, hmid, destId); myBatch.moved += 1; return; }
           throw error;
         }
-        // IMAP MOVE may drop custom keywords server-side; re-apply the tags
-        // at the destination (best effort, once).
         await reapplyTagsAtDestination(item, hmid, destId);
         await sleep(IMAP_DELAY);
-        batch.moved += 1;
+        checkCancel();
+        myBatch.moved += 1;
       } else if (!doTag) {
         throw new Error('No tag with a target folder');
       }
     }
   };
 
-  // First pass: skip failures and collect them for a retry at the end.
   let failed = [];
-  items.forEach((item, idx) => { item.idx = idx + 1; });
-  for (const item of items) {
-    if (batch.cancelRequested) break;
-    batch.current += 1;
-    batch.lastSubject = item.subject || '';
+  items.forEach((item, idx) => { item.idx = Number.isFinite(Number(item.n)) && Number(item.n) > 0 ? Number(item.n) : idx + 1; });
+  let cancelled = false;
+  const markUnattempted = (fromIndex) => {
+    for (const item of items.slice(fromIndex)) {
+      failed.push({ item, reason: 'cancelled before processing', attempts: 0 });
+    }
+  };
+  for (let k = 0; k < items.length; k++) {
+    const item = items[k];
+    if (myBatch.cancelRequested) {
+      cancelled = true;
+      markUnattempted(k);
+      break;
+    }
+    myBatch.current += 1;
+    myBatch.lastSubject = item.subject || '';
     try {
       await applyOne(item);
-      batch.ok += 1;
+      myBatch.ok += 1;
     } catch (error) {
+      if (error === CANCELLED) {
+        cancelled = true;
+        markUnattempted(k); // this message and the rest were not completed
+        break;
+      }
       console.error("Email Assistant: Apply error for message ID:", item.id, error);
       failed.push({ item, reason: String(error.message || error).slice(0, 120), attempts: 1 });
     }
   }
 
   // Retries: up to MAX_ATTEMPTS tries per message in total.
-  for (let attempt = 2; attempt <= MAX_ATTEMPTS && failed.length && !batch.cancelRequested; attempt++) {
-      batch.lastSubject = t('retryingLabel', { attempt: attempt, total: failed.length });
+  for (let attempt = 2; attempt <= MAX_ATTEMPTS && failed.length && !myBatch.cancelRequested; attempt++) {
+    myBatch.lastSubject = t('retryingLabel', { attempt, total: failed.length });
     const still = [];
-    for (const entry of failed) {
-      if (batch.cancelRequested) break;
-      batch.lastSubject = entry.item.subject || '';
+    for (let k = 0; k < failed.length; k++) {
+      const entry = failed[k];
+      if (myBatch.cancelRequested) {
+        cancelled = true;
+        // Entries not retried yet in this round are still failures.
+        still.push(...failed.slice(k));
+        break;
+      }
+      myBatch.lastSubject = entry.item.subject || '';
       try {
         await applyOne(entry.item);
-        batch.ok += 1;
+        myBatch.ok += 1;
       } catch (error) {
+        if (error === CANCELLED) {
+          cancelled = true;
+          still.push(...failed.slice(k)); // this entry and the rest were not completed
+          break;
+        }
         console.error(`Email Assistant: Apply attempt ${attempt} failed for message ID:`, entry.item.id, error);
         still.push({ ...entry, reason: String(error.message || error).slice(0, 120), attempts: attempt });
       }
     }
+    // Commit this round's outcome even when cancelled: entries that succeeded
+    // earlier in this round must be removed from `failed`, or they would be
+    // counted twice; entries not reached must stay, or ok+fail < total.
     failed = still;
+    if (cancelled) break;
   }
 
-  // Messages that failed all attempts get the failure marker tag.
-  for (const { item, reason } of failed.filter(e => e.attempts >= MAX_ATTEMPTS)) {
-    batch.fail += 1;
-    batch.failDetails.push({ n: item.idx, subject: item.subject || '', reason });
-    // Transient write failures happen (network hiccups, throttling); only
-    // degrade an account after several independent failed messages.
+  // Every message that did not succeed is counted as failed — including
+  // messages left in the retry queue when the user cancelled.
+  for (const { item, reason } of failed) {
+    myBatch.fail += 1;
+    myBatch.failDetails.push({ n: item.idx, subject: item.subject || '', reason: cancelled && !/cancelled/i.test(reason) ? `${reason} (cancelled)` : reason });
     if (item.accountId && /Tag not applied/.test(reason)) {
       noTagFailures[item.accountId] = (noTagFailures[item.accountId] || 0) + 1;
       await messenger.storage.local.set({ noTagFailures });
       if (noTagFailures[item.accountId] >= 3 && !noTagAccounts.includes(item.accountId)) {
         noTagAccounts.push(item.accountId);
         await messenger.storage.local.set({ noTagAccounts });
-        batch.skippedNotes.push(`${t('tagUnsupportedNote')} (${item.accountId})`);
+        myBatch.skippedNotes.push(`${t('tagUnsupportedNote')} (${item.accountId})`);
       }
     }
     try {
       await sleep(IMAP_DELAY);
+      checkCancel();
       const details = await withTimeout(messenger.messages.get(item.id), IMAP_TIMEOUT, "Fail-tag read");
-      const merged = new Set([...(details.tags || []), FAIL_TAG]);
+      const merged = new Set([...(details.tags || []), failTag]);
       await withTimeout(messenger.messages.update(item.id, { tags: Array.from(merged) }), IMAP_TIMEOUT, "Tag write");
     } catch (error) {
-      console.error("Email Assistant: Could not apply failure tag to message ID:", item.id, error);
+      if (error !== CANCELLED) console.error("Email Assistant: Could not apply failure tag to message ID:", item.id, error);
     }
   }
 
-  if (batch.phase === 'applying') {
-    batch.phase = batch.cancelRequested ? 'cancelled' : 'done';
-  }
+  myBatch.phase = myBatch.cancelRequested ? 'cancelled' : 'done';
   try {
     await messenger.storage.local.set({ lastBatch: batchStatus() });
   } catch { /* diagnostic only */ }
-  console.log(`Email Assistant: Apply ${batch.phase} — ok: ${batch.ok}, fail: ${batch.fail}, moved: ${batch.moved}`);
-  notifyBasic(batch.phase === 'done'
-    ? t('notifyApplied', { ok: batch.ok, fail: batch.fail, moved: batch.moved })
-    : t('notifyCancelled', { ok: batch.ok, fail: batch.fail }));
+  console.log(`Email Assistant: Apply ${myBatch.phase} — ok: ${myBatch.ok}, fail: ${myBatch.fail}, moved: ${myBatch.moved}`);
+  notifyBasic(myBatch.phase === 'done'
+    ? t('notifyApplied', { ok: myBatch.ok, fail: myBatch.fail, moved: myBatch.moved })
+    : t('notifyCancelled', { ok: myBatch.ok, fail: myBatch.fail }));
   return batchStatus();
 }
 
@@ -509,11 +577,13 @@ async function allListMessages(list) {
   return messages;
 }
 
-async function scanSelection() {
-  let tabs = await messenger.mailTabs.query({ active: true });
-  if (!tabs.length) {
-    tabs = await messenger.mailTabs.query({});
+async function scanSelection(windowId) {
+  let tabs = [];
+  if (Number.isFinite(windowId) && windowId > 0) {
+    tabs = await messenger.mailTabs.query({ windowId });
   }
+  if (!tabs.length) tabs = await messenger.mailTabs.query({ active: true });
+  if (!tabs.length) tabs = await messenger.mailTabs.query({});
   if (!tabs.length) return [];
 
   const list = await messenger.mailTabs.getSelectedMessages(tabs[0].id);
@@ -528,53 +598,87 @@ async function scanSelection() {
 }
 
 async function startBatchWith(messages, notify) {
-  if (batch.phase === 'analyzing' || batch.phase === 'applying') {
+  if (tagsReady) await tagsReady;
+  if (['analyzing', 'applying'].includes(batch.phase) || runningPromise) {
     return { alreadyRunning: true, ...batchStatus() };
   }
   if (!messages.length) {
     return { selectionEmpty: true, ...batchStatus() };
   }
-  runAnalysis(messages, notify).catch(err => {
-    console.error("Email Assistant: Analysis crashed:", err);
-    batch.phase = 'error';
-    batch.lastError = String(err.message || err);
-  });
+  const promise = runAnalysis(messages, notify)
+    .catch(err => {
+      console.error("Email Assistant: Analysis crashed:", err);
+      batch.phase = 'error';
+      batch.lastError = String(err.message || err);
+    })
+    .finally(() => { runningPromise = null; });
+  runningPromise = promise;
   return batchStatus();
 }
 
-async function startBatch() {
-  const messages = await scanSelection();
+async function startBatch(windowId) {
+  const messages = await scanSelection(windowId);
   return startBatchWith(messages, false);
+}
+
+function guardApply(promise) {
+  // Same top-level convergence for apply as for analysis: a pre-flight
+  // exception must never leave the state machine stuck in 'applying'.
+  runningPromise = promise
+    .catch(err => {
+      console.error("Email Assistant: Apply crashed:", err);
+      batch.phase = 'error';
+      batch.lastError = String(err.message || err);
+      return batchStatus();
+    })
+    .finally(() => { runningPromise = null; });
+  return runningPromise;
 }
 
 messenger.runtime.onMessage.addListener((msg) => {
   switch (msg && msg.type) {
-    case 'scanSelection':
-      return scanSelection();
     case 'ea.batch.start':
-      return startBatch();
+      return startBatch(msg.windowId);
     case 'ea.batch.startWith':
       return startBatchWith(msg.messages || [], false);
     case 'ea.batch.apply':
-      return applyReview(msg.items || []);
+      return guardApply(applyReview(msg.items || [], {
+        fail: batch.analysisFailed || 0,
+        failDetails: batch.analysisFailDetails || []
+      }));
+    case 'ea.batch.review':
+      // Persist the user's tag edits for the open review; the panel may be
+      // closed before Apply, and reopening it must not lose those edits.
+      if (batch.phase === 'reviewing') {
+        const tagsById = new Map((msg.items || []).map(i => [i.id, i.tags || []]));
+        for (const item of batch.reviewItems) {
+          if (tagsById.has(item.id)) item.tags = [...tagsById.get(item.id)];
+        }
+      }
+      return Promise.resolve(batchStatus());
     case 'ea.batch.status':
       return Promise.resolve(batchStatus());
     case 'ea.batch.cancel':
       if (['analyzing', 'applying'].includes(batch.phase)) {
         batch.cancelRequested = true;
-        triggerAbort(); // kill in-flight LLM requests right away
+        triggerAbort();
+      } else if (batch.phase === 'reviewing') {
+        batch = freshBatch();
       }
-      else if (batch.phase === 'reviewing') batch = { ...batch, phase: 'idle', reviewItems: [] };
       return Promise.resolve(batchStatus());
     case 'ea.batch.reset':
-      if (!['analyzing', 'applying'].includes(batch.phase)) {
-        batch = { ...batch, phase: 'idle', current: 0, total: 0, ok: 0, fail: 0, moved: 0, lastSubject: '', lastError: null, failDetails: [], consecutiveFails: 0, reviewItems: [] };
-      }
+      // Force-reset is always allowed once no worker is alive. A stale
+      // 'applying' phase from a crash must not lock the extension forever.
+      if (!runningPromise) batch = freshBatch();
       return Promise.resolve(batchStatus());
+    case 'ea.tags.ensure':
+      return (tagsReady || Promise.resolve()).then(() => ensureTagsExist());
     default:
       return undefined;
   }
 });
 
 // --- Initialize ---
-ensureTagsExist();
+// Wait for migration before batches can start; tagKeys must be ready.
+tagsReady = ensureTagsExist().catch(err => console.error('Email Assistant: tag init failed:', err));
+// ea.tags.ensure from other contexts must wait for the initial migration too.

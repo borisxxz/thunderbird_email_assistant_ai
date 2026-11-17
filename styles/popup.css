@@ -235,6 +235,16 @@ body { display: flex; flex-direction: column; }
   flex-direction: column;
   gap: 2px;
 }
+/* Rendered on <body> with viewport coordinates so no scroll container can
+   clip it (JavaScript sets left/top; this just establishes the layer). */
+.ea-tag-menu--floating {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  right: auto;
+  bottom: auto;
+  z-index: 1000;
+}
 .ea-tag-menu button {
   display: flex;
   align-items: center;

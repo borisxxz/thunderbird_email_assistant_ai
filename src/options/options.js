@@ -1,5 +1,4 @@
-import { DEFAULTS, PROVIDERS, providerSettings } from '../core/config.js';
-import { ensureTagsExist } from '../core/tags.js';
+import { DEFAULTS, PROVIDERS, providerSettings, officialHost } from '../core/config.js';
 import { listModels, testConnection } from '../core/connection.js';
 import { getLanguage, setLanguage, t, LANGUAGES } from '../core/i18n.js';
 import { icons } from '../ui/icons.js';
@@ -18,6 +17,7 @@ let settings = null;
 let customTags = [];
 let editingIndex = -1;
 let lastFocused = null;
+let formGeneration = 0; // invalidates in-flight connection requests on provider switch
 
 // ---------- Toast ----------
 function showToast(kind, message, sticky = false) {
@@ -26,9 +26,15 @@ function showToast(kind, message, sticky = false) {
   toast.setAttribute('role', kind === 'danger' ? 'alert' : 'status');
   toast.appendChild(kind === 'success' ? icons.check() : (kind === 'warning' ? icons.warn() : icons.error()));
   toast.appendChild(el('span', null, message));
+  const close = el('button', 'ea-icon-btn ea-toast__close');
+  close.type = 'button';
+  close.setAttribute('aria-label', t('close'));
+  close.appendChild(icons.close());
+  close.addEventListener('click', () => toast.remove());
+  toast.appendChild(close);
   wrap.appendChild(toast);
   const remove = () => toast.remove();
-  if (!sticky) setTimeout(remove, 3500);
+  setTimeout(remove, sticky ? 12000 : 3500);
 }
 
 // ---------- Modal helpers ----------
@@ -54,6 +60,10 @@ function trapTab(node, e) {
 function applyStaticTexts() {
   document.documentElement.lang = currentLang === 'zh-CN' ? 'zh-CN' : 'en';
   $('brand-title').textContent = t('brandTitle');
+  $('version-badge').textContent = 'v' + messenger.runtime.getManifest().version;
+  $('language-seg').setAttribute('aria-label', t('languageAria'));
+  $('main-nav').setAttribute('aria-label', t('navAria'));
+  $('provider-grid').setAttribute('aria-label', t('providerAria'));
   $('nav-providers').textContent = t('navProviders');
   $('nav-tags').textContent = t('navTags');
   $('providers-title').textContent = t('providersTitle');
@@ -72,6 +82,8 @@ function applyStaticTexts() {
   $('tag-prompt-help').textContent = t('tagPromptHelp');
   $('tag-folder-label').textContent = t('tagFolderLabel');
   $('tag-folder-help').textContent = t('tagFolderHelp');
+  $('tag-modal-close').setAttribute('aria-label', t('close'));
+  $('confirm-close').setAttribute('aria-label', t('close'));
   $('tag-form-cancel').textContent = t('cancel');
   $('tag-form-save').textContent = t('saveTag');
   $('confirm-cancel').textContent = t('cancel');
@@ -88,16 +100,30 @@ let currentLang = 'en';
 function renderLanguageSeg() {
   const seg = $('language-seg');
   seg.innerHTML = '';
+  const choose = async (code) => {
+    if (code === currentLang) return;
+    currentLang = code;
+    await setLanguage(code);
+    renderAll();
+    const btn = seg.querySelector(`[data-lang="${code}"]`);
+    if (btn) btn.focus();
+  };
   for (const { code, label } of LANGUAGES) {
     const opt = el('button', 'ea-seg__opt', label);
     opt.type = 'button';
+    opt.dataset.lang = code;
     opt.setAttribute('role', 'radio');
     opt.setAttribute('aria-checked', String(code === currentLang));
-    opt.addEventListener('click', async () => {
-      if (code === currentLang) return;
-      currentLang = code;
-      await setLanguage(code);
-      renderAll();
+    opt.tabIndex = code === currentLang ? 0 : -1;
+    opt.addEventListener('click', () => choose(code));
+    // Radio-group keyboard convention: arrows move and select.
+    opt.addEventListener('keydown', (e) => {
+      const idx = LANGUAGES.findIndex(l => l.code === code);
+      const delta = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+      if (!delta) return;
+      e.preventDefault();
+      const next = LANGUAGES[(idx + delta + LANGUAGES.length) % LANGUAGES.length].code;
+      choose(next);
     });
     seg.appendChild(opt);
   }
@@ -168,6 +194,7 @@ function renderProviderGrid() {
 }
 
 function selectProvider(key) {
+  formGeneration++; // stale fetch/test responses from the previous provider are ignored
   settings.provider = key;
   renderProviderGrid();
   renderProviderPanel();
@@ -276,7 +303,19 @@ function renderProviderPanel() {
     const privacy = el('div', 'ea-note ea-note--privacy');
     privacy.appendChild(icons.warn());
     privacy.appendChild(el('span', null, meta.privacyNote));
-    form.appendChild(privacy);
+    const hostWarning = el('div', 'ea-note ea-note--danger');
+    hostWarning.hidden = true;
+    const refreshWarning = () => {
+      let actualHost = '';
+      try { actualHost = new URL(urlInput.value.trim()).host; } catch { /* incomplete URL */ }
+      const expected = officialHost(key);
+      const thirdParty = actualHost && expected && actualHost !== expected;
+      hostWarning.hidden = !thirdParty;
+      if (thirdParty) hostWarning.textContent = t('customHostWarning', { host: actualHost, official: expected });
+    };
+    urlInput.addEventListener('input', refreshWarning);
+    refreshWarning();
+    form.append(privacy, hostWarning);
   }
 
   // 高级设置（并发数 / Temperature / Max tokens）
@@ -342,7 +381,8 @@ function renderProviderPanel() {
     advFields[1].input.value = '';
     advFields[2].input.value = '';
     advFields[3].input.value = DEFAULTS.maxAttempts;
-    updatePermPreview();
+    // Trigger all input listeners (endpoint preview, field errors, host warning).
+    urlInput.dispatchEvent(new Event('input', { bubbles: true }));
   });
   const saveBtn = el('button', 'ea-btn ea-btn--primary ea-btn--lg', t('saveSettings'));
   saveBtn.type = 'submit';
@@ -378,9 +418,11 @@ function renderProviderPanel() {
   };
 
   fetchModelsBtn.addEventListener('click', async () => {
+    const gen = ++formGeneration;
     fetchModelsBtn.classList.add('is-loading');
     try {
       const models = await listModels(currentValues());
+      if (gen !== formGeneration) return;
       modelDatalist.textContent = '';
       for (const model of models) {
         const option = el('option');
@@ -389,6 +431,7 @@ function renderProviderPanel() {
       }
       modelHelp.textContent = t('modelsFetched', { count: models.length });
     } catch (err) {
+      if (gen !== formGeneration) return;
       modelHelp.textContent = t('modelHelp');
       let msg = String(err.message || err);
       if (/NetworkError|Failed to fetch/i.test(msg)) {
@@ -396,23 +439,26 @@ function renderProviderPanel() {
       }
       showToast('danger', t('fetchModelsFailed', { message: msg }), true);
     } finally {
-      fetchModelsBtn.classList.remove('is-loading');
+      if (gen === formGeneration) fetchModelsBtn.classList.remove('is-loading');
     }
   });
 
   testBtn.addEventListener('click', async () => {
+    const gen = ++formGeneration;
     testBtn.classList.add('is-loading');
     try {
       await testConnection(currentValues());
+      if (gen !== formGeneration) return;
       showToast('success', t('testOk', { provider: meta.label }));
     } catch (err) {
+      if (gen !== formGeneration) return;
       let msg = String(err.message || err);
       if (/NetworkError|Failed to fetch/i.test(msg)) {
         msg += ' ' + t('testHint');
       }
       showToast('danger', t('testFailed', { message: msg }), true);
     } finally {
-      testBtn.classList.remove('is-loading');
+      if (gen === formGeneration) testBtn.classList.remove('is-loading');
     }
   });
 
@@ -618,7 +664,7 @@ function saveTagForm() {
 async function persistTags() {
   await messenger.storage.local.set({ customTags });
   renderTagList();
-  ensureTagsExist();
+  messenger.runtime.sendMessage({ type: 'ea.tags.ensure' }).catch(() => {});
 }
 
 // ---------- 诊断导出 ----------
@@ -778,7 +824,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   setupNav();
   renderAll();
-  ensureTagsExist();
+  messenger.runtime.sendMessage({ type: 'ea.tags.ensure' }).catch(() => {});
 
   $('add-tag-btn').addEventListener('click', () => openTagModal(-1));
   $('add-first-tag-btn').addEventListener('click', () => openTagModal(-1));

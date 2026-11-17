@@ -1,6 +1,6 @@
 import { buildPrompt } from '../core/analysis.js';
 import { providerSettings, SYSTEM_PROMPT, DEFAULTS, SYSTEM_PROMPT_SUMMARY } from '../core/config.js';
-import { genParams, parseJsonResponse, postJson, trimBaseUrl } from './utils.js';
+import { genParams, isAbortError, parseJsonResponse, postJson, trimBaseUrl } from './utils.js';
 
 const CLAUDE_API_VERSION = '2023-06-01';
 
@@ -22,6 +22,13 @@ function headers(apiKey) {
   };
 }
 
+function contentText(result) {
+  const blocks = (result && result.content) || [];
+  const block = blocks.find(b => b && b.type === 'text' && typeof b.text === 'string' && b.text);
+  if (!block) throw new Error('Claude returned no text content');
+  return block.text;
+}
+
 async function analyze(settings, structuredData, customTags) {
   const cfg = config(settings);
   if (!cfg.apiKey) {
@@ -29,7 +36,7 @@ async function analyze(settings, structuredData, customTags) {
     return null;
   }
 
-  const prompt = buildPrompt(structuredData, customTags);
+  const prompt = buildPrompt(structuredData, customTags, settings.provider);
   const gen = genParams(settings);
 
   try {
@@ -40,8 +47,9 @@ async function analyze(settings, structuredData, customTags) {
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: prompt }]
     });
-    return parseJsonResponse('Claude', result.content[0].text);
+    return parseJsonResponse('Claude', contentText(result));
   } catch (error) {
+    if (isAbortError(error)) throw error;
     console.error(`Claude Error (URL: ${cfg.baseUrl}, model: ${cfg.model}):`, error);
     return null;
   }
@@ -63,8 +71,9 @@ async function summarize(settings, prompt) {
       system: SYSTEM_PROMPT_SUMMARY,
       messages: [{ role: "user", content: prompt }]
     });
-    return result.content[0].text;
+    return contentText(result);
   } catch (error) {
+    if (isAbortError(error)) throw error;
     console.error(`Claude summarize error (URL: ${cfg.baseUrl}, model: ${cfg.model}):`, error);
     return null;
   }

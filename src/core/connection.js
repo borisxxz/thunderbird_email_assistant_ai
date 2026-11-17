@@ -10,6 +10,16 @@ async function getJson(url, headers) {
   return resp.json();
 }
 
+function ollamaEndpoint(baseUrl) {
+  return baseUrl.endsWith('/api/generate') ? baseUrl : `${baseUrl}/api/generate`;
+}
+
+function ollamaTagsUrl(baseUrl) {
+  return (baseUrl.endsWith('/api/generate') ? baseUrl.slice(0, -'/api/generate'.length) : baseUrl) + '/api/tags';
+}
+
+// A connection test only needs an HTTP success — custom gateways may return
+// plain text or an empty body, which is still a working connection.
 async function postOk(url, headers, body) {
   const resp = await fetch(url, {
     method: 'POST',
@@ -20,7 +30,7 @@ async function postOk(url, headers, body) {
     const text = await resp.text().catch(() => '');
     throw new Error(`${resp.status} ${resp.statusText}${text ? ' — ' + text.slice(0, 200) : ''}`);
   }
-  return resp.json();
+  return true;
 }
 
 function connectionConfig(settings) {
@@ -46,7 +56,7 @@ export async function listModels(settings) {
 
   switch (cfg.meta.kind) {
     case 'ollama': {
-      const data = await getJson(`${baseUrl}/api/tags`);
+      const data = await getJson(ollamaTagsUrl(baseUrl));
       return (data.models || []).map(m => m.name);
     }
     case 'openai-compat':
@@ -56,7 +66,7 @@ export async function listModels(settings) {
       return (data.data || []).map(m => m.id).sort();
     }
     case 'gemini': {
-      const data = await getJson(`${baseUrl}/models?pageSize=100&key=${encodeURIComponent(apiKey)}`);
+      const data = await getJson(`${baseUrl}/models?pageSize=100`, { 'x-goog-api-key': apiKey });
       return (data.models || []).map(m => String(m.name).replace(/^models\//, ''));
     }
     case 'claude': {
@@ -79,7 +89,7 @@ export async function testConnection(settings) {
 
   switch (meta.kind) {
     case 'ollama':
-      await postOk(`${baseUrl}/api/generate`, { 'Content-Type': 'application/json' }, {
+      await postOk(ollamaEndpoint(baseUrl), { 'Content-Type': 'application/json' }, {
         model,
         prompt: 'ping',
         stream: false,
@@ -108,8 +118,8 @@ export async function testConnection(settings) {
       break;
     }
     case 'gemini':
-      await postOk(`${baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
-        { 'Content-Type': 'application/json' }, {
+      await postOk(`${baseUrl}/models/${model}:generateContent`,
+        { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey }, {
           contents: [{ parts: [{ text: 'ping' }] }],
           generationConfig: { maxOutputTokens: 1 }
         });

@@ -159,6 +159,24 @@ export const CONTEXT_TOKEN_LIMIT = 128000;
 export const CHARS_PER_TOKEN_ESTIMATE = 4;
 export const CONTEXT_CHAR_LIMIT = CONTEXT_TOKEN_LIMIT * CHARS_PER_TOKEN_ESTIMATE;
 
+// Local models are usually started with a much smaller context window than
+// cloud models. Keep prompts inside a conservative budget for Ollama so the
+// generated JSON is not cut off mid-object.
+export const LOCAL_CONTEXT_TOKEN_LIMIT = 8192;
+export function contextCharLimit(provider) {
+  return provider === 'ollama'
+    ? LOCAL_CONTEXT_TOKEN_LIMIT * CHARS_PER_TOKEN_ESTIMATE
+    : CONTEXT_CHAR_LIMIT;
+}
+
+// Hosts that the built-in privacy notes talk about. Used by the options page
+// to warn when the configured Base URL points somewhere else.
+export function officialHost(provider) {
+  const meta = PROVIDERS[provider];
+  if (!meta || !meta.defaultBaseUrl) return null;
+  try { return new URL(meta.defaultBaseUrl).host; } catch { return null; }
+}
+
 export const SYSTEM_PROMPT = "You are an email analysis expert. Your task is to analyze the provided email data and respond only with a single, clean JSON object that strictly follows the requested schema. Do not include any conversational text, markdown formatting, or explanations in your response.";
 
 export const SYSTEM_PROMPT_SUMMARY = "You are an email assistant. Summarize the given email accurately and concisely for the user. Use the language explicitly requested in the user message. Structure the summary in 2-4 short paragraphs or bullet points, covering: what the email is about, any action required from the recipient, and key dates or deadlines if present. Do not add commentary of your own.";

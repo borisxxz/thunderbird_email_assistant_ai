@@ -10,6 +10,8 @@ export const MESSAGES = {
     navProviders: 'Providers',
     navTags: 'Custom Tags',
     languageAria: 'UI language',
+    navAria: 'Settings sections',
+    providerAria: 'LLM provider',
 
     // Options page — providers
     providersTitle: 'Provider Settings',
@@ -23,7 +25,7 @@ export const MESSAGES = {
     modelLabel: 'Model',
     modelHelp: 'Model name sent to the provider.',
     modelRequired: 'Model name is required.',
-    apiKeyLabel: '接口密钥（API Key）',
+    apiKeyLabel: 'API Key',
     apiKeyHelp: 'Stored on this machine only, never uploaded.',
     apiKeyOptionalHelp: 'Optional — fill in only if your gateway requires a key.',
     apiKeyRequired: 'Cloud providers require an API key.',
@@ -99,6 +101,7 @@ export const MESSAGES = {
     okStat: 'Succeeded',
     failStat: 'Failed',
     failDetailMore: '+ {count} more failed',
+    analysisFailedNote: '{count} message(s) failed analysis and were not tagged',
     errorTitle: 'Batch failed',
     errorHint: 'Check that your provider is reachable and the API key is valid.',
     retry: 'Retry',
@@ -168,6 +171,7 @@ export const MESSAGES = {
     testOk: 'Connection OK — {provider} is reachable and the model responded.',
     testFailed: 'Connection failed: {message}',
     testHint: 'The server could not be reached — check that it is running at this address.',
+    customHostWarning: 'Custom host {host} is in use. Email content and your API key may be sent to this third party instead of {official}.',
   },
 
   'zh-CN': {
@@ -175,6 +179,8 @@ export const MESSAGES = {
     navProviders: '提供商',
     navTags: '自定义标签',
     languageAria: '界面语言',
+    navAria: '设置分区',
+    providerAria: 'LLM 提供商',
 
     providersTitle: '提供商设置',
     providersDesc: '选择用于邮件分析的 LLM。选中一个提供商以展开其连接配置。',
@@ -261,6 +267,7 @@ export const MESSAGES = {
     okStat: '成功',
     failStat: '失败',
     failDetailMore: '另有 {count} 封失败',
+    analysisFailedNote: '{count} 封邮件分析失败，未执行打标',
     errorTitle: '批量执行失败',
     errorHint: '请检查提供商是否可达、API Key 是否有效。',
     retry: '重试',
@@ -306,6 +313,7 @@ export const MESSAGES = {
     tagSkippedLine: '【已跳过打标】{subject}',
     skipReasonQQ: 'QQ 邮箱服务器不保存自定义标签（官方确认的平台限制），已自动改为移动归档',
     skipReasonGmail: 'Gmail 的 IMAP 不保存自定义标签，已自动改为移动归档',
+    tagUnsupportedNote: '此服务器不保存自定义标签——该账户已自动跳过打标',
     movedStat: '已移动 {count} 封邮件到文件夹',
 
     // 高级设置
@@ -327,10 +335,22 @@ export const MESSAGES = {
     testOk: '连接成功——{provider} 可达，模型响应正常。',
     testFailed: '连接失败：{message}',
     testHint: '无法连接服务器——请确认服务正在该地址运行。',
+    customHostWarning: '当前使用自定义主机 {host}。邮件内容与 API Key 可能会被发送到该第三方，而非 {official}。',
   }
 };
 
 let currentLang = null;
+
+// Each webpack entry gets its own copy of this module. Keep the cache in sync
+// across background / options / panel / summary windows via storage.onChanged
+// so switching the language in settings updates every context.
+if (typeof messenger !== 'undefined' && messenger.storage && messenger.storage.onChanged) {
+  messenger.storage.onChanged.addListener((changes) => {
+    if (changes.language && MESSAGES[changes.language.newValue]) {
+      currentLang = changes.language.newValue;
+    }
+  });
+}
 
 export async function getLanguage() {
   if (currentLang) return currentLang;

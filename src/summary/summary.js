@@ -1,5 +1,4 @@
-import { DEFAULTS } from '../core/config.js';
-import { ensureTagsExist } from '../core/tags.js';
+import { DEFAULTS, providerSettings } from '../core/config.js';
 import { findEmailParts } from '../core/analysis.js';
 import { buildSummaryPrompt } from '../core/summary.js';
 import { PROVIDER_ENGINES } from '../providers/index.js';
@@ -84,7 +83,7 @@ function renderChips() {
         let realKey = keyMap[tag.key];
         if (!realKey) {
           // Mapping may be stale (upgrade or manual tag changes) — rebuild it.
-          await ensureTagsExist();
+          await messenger.runtime.sendMessage({ type: 'ea.tags.ensure' });
           ({ tagKeys: keyMap } = await messenger.storage.local.get({ tagKeys: {} }));
           realKey = keyMap[tag.key] || tag.key;
         }
@@ -138,7 +137,7 @@ async function doTranslate() {
       'Preserve paragraph breaks.',
       '',
       '--- EMAIL START ---',
-      emailBody,
+      emailBody.length > 24000 ? emailBody.substring(0, 24000) + '\n…[truncated]' : emailBody,
       '--- EMAIL END ---'
     ].join('\n');
     const result = await withTimeout(engine.summarize(cachedSettings, prompt), 120000);
@@ -153,9 +152,12 @@ async function doTranslate() {
 }
 
 function withTimeout(promise, ms) {
+  let timer = null;
   return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+    Promise.resolve(promise).finally(() => { if (timer) clearTimeout(timer); }),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('timeout')), ms);
+    })
   ]);
 }
 
@@ -164,8 +166,21 @@ async function runSummary() {
   $('sum-copy').classList.remove('is-copied');
 
   try {
-    const settings = await messenger.storage.local.get(DEFAULTS);
-    ({ customTags } = await messenger.storage.local.get({ customTags: DEFAULTS.customTags }));
+    // Fetch only the keys this window needs. Reading DEFAULTS would pull every
+    // provider's plaintext API key into this page context.
+    const { provider } = await messenger.storage.local.get({ provider: DEFAULTS.provider });
+    const fields = providerSettings(provider);
+    const defaults = {
+      provider,
+      temperature: DEFAULTS.temperature,
+      maxTokens: DEFAULTS.maxTokens,
+      customTags: DEFAULTS.customTags,
+      [fields.apiKey]: DEFAULTS[fields.apiKey],
+      [fields.baseUrl]: DEFAULTS[fields.baseUrl],
+      [fields.model]: DEFAULTS[fields.model]
+    };
+    const settings = await messenger.storage.local.get(defaults);
+    ({ customTags } = settings);
     const engine = PROVIDER_ENGINES[settings.provider];
     if (!engine) throw new Error(`No engine for provider: ${settings.provider}`);
 
@@ -178,10 +193,10 @@ async function runSummary() {
     const langName = currentLang === 'zh-CN' ? 'Chinese (中文)' : 'English';
     const prompt = buildSummaryPrompt(full.headers, body, attachments, langName);
 
-    const [summary, analysisResult] = await withTimeout(Promise.all([
-      engine.summarize(settings, prompt),
-      engine.analyze(settings, structured, settings.customTags).catch(() => null)
-    ]), 60000);
+    const summary = await withTimeout(engine.summarize(settings, prompt), 60000);
+    const analysisResult = await withTimeout(
+      engine.analyze(settings, structured, settings.customTags).catch(() => null), 15000
+    ).catch(() => null);
 
     if (!summary) throw new Error(t('summaryErrorHint'));
     summaryText = summary;
@@ -189,6 +204,7 @@ async function runSummary() {
     renderSuccess();
   } catch (err) {
     console.error('Email Assistant: summary failed:', err);
+    $('sum-error-hint').textContent = `${t('summaryErrorHint')} — ${String(err.message || err)}`;
     setPhase('error');
   }
 }
@@ -226,7 +242,6 @@ $('sum-copy').addEventListener('click', async () => {
     setTimeout(() => {
       $('sum-copy').classList.remove('is-copied');
       $('sum-copy-label').textContent = t('copySummary');
-  $('sum-translate').textContent = t('translateBtn');
     }, 1500);
   } catch (err) {
     console.error('Clipboard write failed:', err);

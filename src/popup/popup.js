@@ -52,12 +52,15 @@ function setPhase(phase) {
 }
 
 async function renderFooter() {
-  const settings = await messenger.storage.local.get(DEFAULTS);
-  const meta = PROVIDERS[settings.provider] || {};
-  const { model: modelField } = providerSettings(settings.provider);
-  $('foot-provider').textContent = meta.label || settings.provider;
-  $('foot-model').textContent = settings[modelField] || '';
-  $('foot-local').hidden = settings.provider !== 'ollama';
+  // Only the provider label and model are needed here — reading DEFAULTS would
+  // pull every provider's plaintext API key into this page context.
+  const { provider } = await messenger.storage.local.get({ provider: DEFAULTS.provider });
+  const meta = PROVIDERS[provider] || {};
+  const { model: modelField } = providerSettings(provider);
+  const model = (await messenger.storage.local.get({ [modelField]: '' }))[modelField] || '';
+  $('foot-provider').textContent = meta.label || provider;
+  $('foot-model').textContent = model;
+  $('foot-local').hidden = provider !== 'ollama';
 }
 
 function renderSelectionCount() {
@@ -70,7 +73,7 @@ function renderBatch(status) {
   } else {
     inReview = false;
   }
-  if (status.phase === 'analyzing' || status.phase === 'applying' || status.phase === 'running') {
+  if (status.phase === 'analyzing' || status.phase === 'applying') {
     const label = status.phase === 'applying' ? t('applyingLabel') : t('runningLabel');
     $('run-label').textContent = `${label} ${status.current}/${status.total}`;
     const pct = status.total ? Math.round((status.current / status.total) * 100) : 0;
@@ -83,16 +86,23 @@ function renderBatch(status) {
     setInlineStatus('accent', status.phase === 'applying' ? t('applyingLabel') : t('popupStatusRunning'));
   } else if (status.phase === 'done') {
     $('ok-num').textContent = status.ok;
-    $('fail-num').textContent = status.fail;
+    $('fail-num').textContent = status.fail + (status.analysisFailed || 0);
   $('done-moved').hidden = !(status.moved || (status.skippedNotes || []).length);
     $('done-moved').textContent = [
       status.moved ? t('movedStat', { count: status.moved }) : '',
       ...(status.skippedNotes || []).map(n => n.split(' · ').pop())
     ].filter(Boolean).join('\n');
-    renderFailDetails(status);
+    if (status.analysisFailed) {
+      status = { ...status, failDetails: [
+        { n: 0, subject: '', reason: t('analysisFailedNote', { count: status.analysisFailed }) },
+        ...(status.failDetails || [])
+      ] };
+      renderFailDetails(status);
+    } else renderFailDetails(status);
     setPhase('done');
-    setInlineStatus(status.fail > 0 ? 'warning' : 'success',
-      status.fail > 0 ? t('popupStatusPartial', { fail: status.fail }) : t('popupStatusDone'));
+    const totalFail = status.fail + (status.analysisFailed || 0);
+    setInlineStatus(totalFail > 0 ? 'warning' : 'success',
+      totalFail > 0 ? t('popupStatusPartial', { fail: totalFail }) : t('popupStatusDone'));
   } else if (status.phase === 'cancelled') {
     $('cancelled-ok').textContent = status.ok;
     $('cancelled-fail').textContent = status.fail;
@@ -154,6 +164,16 @@ function applyTagCount() {
   return reviewData ? reviewData.filter(i => !i.failed).length : 0;
 }
 
+// Keep the background's review snapshot in sync so edits survive closing
+// and reopening the panel before Apply.
+function syncReviewDraft() {
+  if (!reviewData) return;
+  send({
+    type: 'ea.batch.review',
+    items: reviewData.map(({ id, tags }) => ({ id, tags }))
+  }).catch(() => {});
+}
+
 function renderReview() {
   const wrap = $('review-list');
   wrap.replaceChildren();
@@ -194,6 +214,7 @@ function renderReview() {
         chip.addEventListener('click', () => {
           item.tags = item.tags.filter(k => k !== key);
           closeTagMenu();
+          syncReviewDraft();
           renderReview();
         });
         tags.appendChild(chip);
@@ -208,10 +229,10 @@ function renderReview() {
       add.setAttribute('aria-label', t('addTagShort'));
       add.addEventListener('click', (e) => {
         e.stopPropagation();
-        const existing = row.querySelector('.ea-tag-menu');
+        const existing = document.querySelector('.ea-tag-menu');
         closeTagMenu();
         if (existing) return;
-        openTagMenu(row, item);
+        openTagMenu(item, add);
       });
       tags.appendChild(add);
     }
@@ -236,10 +257,11 @@ function makeChip(text, key, extra, color) {
   return chip;
 }
 
-function openTagMenu(row, item) {
+function openTagMenu(item, anchor) {
   const menu = document.createElement('div');
-  menu.className = 'ea-tag-menu';
+  menu.className = 'ea-tag-menu ea-tag-menu--floating';
   for (const [key, meta] of Object.entries(reviewCatalog)) {
+    if (meta.reserved) continue; // failure marker is background-managed only
     const picked = item.tags.includes(key);
     const opt = document.createElement('button');
     opt.type = 'button';
@@ -251,11 +273,37 @@ function openTagMenu(row, item) {
     opt.addEventListener('click', () => {
       if (!item.tags.includes(key)) item.tags.push(key);
       closeTagMenu();
+      syncReviewDraft();
       renderReview();
     });
     menu.appendChild(opt);
   }
-  row.appendChild(menu);
+  // Render as a fixed overlay on <body>: an absolutely positioned menu inside
+  // the scrollable review list gets clipped by the scroll container, which is
+  // exactly why the menu appeared "below the page" until the list was scrolled.
+  document.body.appendChild(menu);
+  positionTagMenu(menu, anchor);
+}
+
+// Place the floating menu using viewport coordinates: open below the anchor,
+// flip above when it would overflow the bottom, and always keep it fully
+// inside the window.
+function positionTagMenu(menu, anchor) {
+  const margin = 8;
+  const gap = 4;
+  const a = anchor.getBoundingClientRect();
+  const m = menu.getBoundingClientRect();
+  const maxHeight = window.innerHeight - margin * 2;
+  if (m.height > maxHeight) menu.style.maxHeight = `${maxHeight}px`;
+  const height = Math.min(m.height, maxHeight);
+  const left = Math.min(Math.max(margin, a.right - m.width), window.innerWidth - m.width - margin);
+  let top = a.bottom + gap;
+  if (top + height > window.innerHeight - margin) {
+    const above = a.top - gap - height;
+    top = above >= margin ? above : Math.max(margin, window.innerHeight - margin - height);
+  }
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
 }
 
 function closeTagMenu() {
@@ -265,6 +313,13 @@ function closeTagMenu() {
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.ea-tag-menu') && !e.target.closest('.ea-chip--add')) closeTagMenu();
 });
+// A fixed menu would detach from its row while the list scrolls — close it.
+document.addEventListener('scroll', (e) => {
+  const target = e.target;
+  if (target && target.nodeType === 1 && target.closest('.ea-tag-menu')) return;
+  closeTagMenu();
+}, true);
+window.addEventListener('resize', () => closeTagMenu());
 
 function schedulePoll(delayMs) {
   clearTimeout(pollTimer);
@@ -274,12 +329,12 @@ function schedulePoll(delayMs) {
 async function poll() {
   try {
     const status = await send({ type: 'ea.batch.status' });
-    if (['running', 'analyzing', 'applying', 'reviewing', 'done', 'cancelled', 'error'].includes(status.phase)) {
+    if (['analyzing', 'applying', 'reviewing', 'done', 'cancelled', 'error'].includes(status.phase)) {
       renderBatch(status);
     } else {
       renderIdleOrEmpty();
     }
-    schedulePoll(['running', 'analyzing', 'applying'].includes(status.phase) ? 1000 : 4000);
+    schedulePoll(['analyzing', 'applying'].includes(status.phase) ? 1000 : 4000);
   } catch {
     schedulePoll(2000);
   }
@@ -388,12 +443,22 @@ $('btn-cancel').addEventListener('click', () => send({ type: 'ea.batch.cancel' }
 $('btn-refresh').addEventListener('click', rescan);
 $('btn-rescan-done').addEventListener('click', rescan);
 $('btn-rescan-cancelled').addEventListener('click', rescan);
-$('btn-retry').addEventListener('click', () => send({ type: 'ea.batch.start' }));
+$('btn-retry').addEventListener('click', async () => {
+  // Use the same source-window scan as Start; background's global active scan
+  // would pick a different window's messages in multi-window setups.
+  const messages = await scanSelectionHere().catch(() => []);
+  const resp = await send({ type: 'ea.batch.startWith', messages });
+  if (resp && resp.selectionEmpty) { selection = []; renderIdleOrEmpty(); }
+  else schedulePoll(200);
+});
 $('btn-error-settings').addEventListener('click', () => messenger.runtime.openOptionsPage());
 $('btn-settings').addEventListener('click', () => messenger.runtime.openOptionsPage());
 $('btn-apply').addEventListener('click', async () => {
   if (!reviewData) return;
-  const items = reviewData.filter(i => !i.failed).map(({ id, subject, tags }) => ({ id, subject, tags }));
+  const items = reviewData
+    .map((item, idx) => ({ item, n: idx + 1 }))
+    .filter(({ item }) => !item.failed)
+    .map(({ item, n }) => ({ id: item.id, subject: item.subject, tags: item.tags, n }));
   closeTagMenu();
   reviewData = null;
   inReview = false;

@@ -1,6 +1,6 @@
 import { buildPrompt } from '../core/analysis.js';
 import { PROVIDERS, providerSettings, SYSTEM_PROMPT, SYSTEM_PROMPT_SUMMARY } from '../core/config.js';
-import { genParams, parseJsonResponse, postJson, trimBaseUrl } from './utils.js';
+import { genParams, isAbortError, parseJsonResponse, postJson, trimBaseUrl } from './utils.js';
 
 // Mistral and DeepSeek (and any OpenAI-compatible gateway the user points at)
 // speak the /chat/completions protocol; OpenAI itself uses openai-responses.js.
@@ -39,7 +39,7 @@ export function createOpenAICompatAdapter(providerKey) {
     const cred = credentials(settings);
     if (!checkConfig(cred)) return null;
 
-    const prompt = buildPrompt(structuredData, customTags);
+    const prompt = buildPrompt(structuredData, customTags, settings.provider);
     const gen = genParams(settings);
 
     try {
@@ -53,8 +53,9 @@ export function createOpenAICompatAdapter(providerKey) {
         ...(gen.temperature !== undefined && { temperature: gen.temperature }),
         ...(gen.maxTokens !== undefined && { max_tokens: gen.maxTokens })
       });
-      return parseJsonResponse(label, result.choices[0].message.content);
+      return parseJsonResponse(label, result && result.choices && result.choices[0] && result.choices[0].message && result.choices[0].message.content);
     } catch (error) {
+      if (isAbortError(error)) throw error;
       console.error(`${label} Error (URL: ${cred.baseUrl}, model: ${cred.model}):`, error);
       return null;
     }
@@ -75,8 +76,9 @@ export function createOpenAICompatAdapter(providerKey) {
         ...(gen.temperature !== undefined && { temperature: gen.temperature }),
         ...(gen.maxTokens !== undefined && { max_tokens: gen.maxTokens })
       });
-      return result.choices[0].message.content;
+      return result && result.choices && result.choices[0] && result.choices[0].message && result.choices[0].message.content;
     } catch (error) {
+      if (isAbortError(error)) throw error;
       console.error(`${label} summarize error (URL: ${cred.baseUrl}, model: ${cred.model}):`, error);
       return null;
     }

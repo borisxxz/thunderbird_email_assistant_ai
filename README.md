@@ -2,8 +2,8 @@
 
 **[English](./README.en.md)** | 中文
 
-![Thunderbird](https://img.shields.io/badge/Thunderbird-102%2B-%230F8FF?logo=thunderbird&logoColor=white)
-![Version](https://img.shields.io/badge/version-0.0.23-indigo)
+![Thunderbird](https://img.shields.io/badge/Thunderbird-121%2B-%230F8FF?logo=thunderbird&logoColor=white)
+![Version](https://img.shields.io/badge/version-0.0.24-indigo)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![CI](https://img.shields.io/badge/CI-GitHub%20Actions%20%2B%20CNB-blue)
 
@@ -36,13 +36,13 @@
 
 - **双语界面（中文 / English）**：设置页顶栏一键切换，摘要语言跟随
 - **自定义标签**：名称 / key / 颜色 / 提示词实时校验；与 Thunderbird 现有标签**同名自动复用**（不重名则新建）；标签支持 **JSON 导入导出**
-- **7 个 LLM 提供商**：Custom 自定义网关（默认）、Ollama（本地）、OpenAI（现行 Responses API）、Google Gemini、Anthropic Claude、Mistral、DeepSeek、Custom（任意 OpenAI 兼容网关，API Key 可选）
+- **7 个 LLM 提供商**：Custom 自定义网关（默认，API Key 可选）、Ollama（本地）、OpenAI（Responses API）、Google Gemini、Anthropic Claude、Mistral、DeepSeek
 - **自定义端点**：每个提供商支持任意 Base URL（协议+主机+端口）与模型，可指向本地网关（如 `http://127.0.0.1:8080/v1`）；内置"获取模型""测试连接"和完整请求地址实时预览
 - **高级设置**：并发数（1–8）、Temperature、最大 Token 数、失败重试次数（1–10）
 
 ## 安装
 
-1. 从 [Releases](https://github.com/borisxxz/thunderbird_email_assistant_ai/releases)（或 [CNB 镜像](https://cnb.cool/boris007/thunderbird_email_assistant_ai)）下载 `email_assistant-0.0.1.zip`
+1. 从 [Releases](https://github.com/borisxxz/thunderbird_email_assistant_ai/releases)（或 [CNB 镜像](https://cnb.cool/boris007/thunderbird_email_assistant_ai)）下载 `email_assistant-0.0.24.zip`
 2. Thunderbird → `工具 → 附加组件和主题` → 齿轮 → **调试附加组件** → **Load Temporary Add-on…** → 选择 zip
 
 > 临时加载重启 Thunderbird 后失效；升级时先 Remove 旧版再加载新版。

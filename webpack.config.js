@@ -11,6 +11,6 @@ module.exports = {
     filename: '[name]-bundle.js',
     path: path.resolve(__dirname),
   },
-  mode: 'development',
-  devtool: 'inline-source-map',
+  mode: 'production',
+  devtool: false,
 };

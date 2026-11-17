@@ -5,4 +5,4 @@
 
 # 2. Run web-ext to package the extension
 ./node_modules/.bin/web-ext build --overwrite-dest \
-  --ignore-files "src/" "node_modules/" "package.json" "package-lock.json" "webpack.config.js" "build.bash"
+  --ignore-files "src/" "node_modules/" "package.json" "package-lock.json" "webpack.config.js" "build.bash" "doc/"

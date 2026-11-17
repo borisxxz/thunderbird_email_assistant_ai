@@ -2,6 +2,7 @@
    Email Assistant 通用组件（三页共享）
    ============================================================ */
 *, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
@@ -303,6 +304,8 @@ button.ea-chip.is-applied {
   animation: ea-toast-in var(--dur-base) var(--ease-out);
 }
 .ea-toast svg { width: 16px; height: 16px; flex-shrink: 0; }
+.ea-toast__close { width: 22px; height: 22px; margin-left: auto; flex-shrink: 0; }
+.ea-toast__close svg { width: 14px; height: 14px; }
 .ea-toast--success svg { color: var(--success); }
 .ea-toast--danger svg { color: var(--danger); }
 .ea-toast--warning svg { color: var(--warning); }
@@ -365,6 +368,7 @@ button.ea-chip.is-applied {
 .ea-note svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
 .ea-note--local { background: var(--success-subtle); color: var(--success); }
 .ea-note--privacy { background: var(--warning-subtle); color: var(--warning); }
+.ea-note--danger { background: var(--danger-subtle); color: var(--danger); }
 
 /* ---------- 代码块 ---------- */
 .ea-code {

@@ -1,6 +1,6 @@
 import { buildPrompt } from '../core/analysis.js';
 import { providerSettings, DEFAULTS, SYSTEM_PROMPT_SUMMARY } from '../core/config.js';
-import { genParams, parseJsonResponse, postJson, trimBaseUrl } from './utils.js';
+import { genParams, isAbortError, parseJsonResponse, postJson, trimBaseUrl } from './utils.js';
 
 function config(settings) {
   const { baseUrl: baseUrlField, model: modelField } = providerSettings('ollama');
@@ -17,7 +17,7 @@ function endpoint(baseUrl) {
 
 async function analyze(settings, structuredData, customTags) {
   const { baseUrl, model } = config(settings);
-  const prompt = buildPrompt(structuredData, customTags);
+  const prompt = buildPrompt(structuredData, customTags, settings.provider);
   const gen = genParams(settings);
   const options = {};
   if (gen.temperature !== undefined) options.temperature = gen.temperature;
@@ -33,6 +33,7 @@ async function analyze(settings, structuredData, customTags) {
     });
     return parseJsonResponse('Ollama', result.response);
   } catch (error) {
+    if (isAbortError(error)) throw error;
     console.error(`Ollama Error (URL: ${baseUrl}, model: ${model}):`, error);
     return null;
   }
@@ -54,6 +55,7 @@ async function summarize(settings, prompt) {
     });
     return result.response;
   } catch (error) {
+    if (isAbortError(error)) throw error;
     console.error(`Ollama summarize error (URL: ${baseUrl}, model: ${model}):`, error);
     return null;
   }

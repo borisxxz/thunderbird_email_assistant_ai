@@ -1,6 +1,6 @@
 import { buildPrompt } from '../core/analysis.js';
 import { providerSettings, SYSTEM_PROMPT, SYSTEM_PROMPT_SUMMARY } from '../core/config.js';
-import { genParams, parseJsonResponse, postJson, trimBaseUrl } from './utils.js';
+import { genParams, isAbortError, parseJsonResponse, postJson, trimBaseUrl } from './utils.js';
 
 // OpenAI's current recommended API: POST {base}/responses with top-level
 // instructions + input, structured output via text.format, text extracted
@@ -34,6 +34,23 @@ function checkConfig({ apiKey, baseUrl }) {
   return true;
 }
 
+// Refusals and truncated responses carry no output_text; report why instead
+// of silently returning null (which surfaces as a generic analysis failure).
+function responseError(result) {
+  for (const item of result.output || []) {
+    for (const part of item.content || []) {
+      if (part.type === 'refusal' && part.refusal) {
+        return `OpenAI refused the request: ${part.refusal}`;
+      }
+    }
+  }
+  if (result.status === 'incomplete') {
+    const reason = result.incomplete_details && result.incomplete_details.reason;
+    return `OpenAI response incomplete: ${reason || 'unknown reason'}`;
+  }
+  return null;
+}
+
 function extractResponseText(result) {
   for (const item of result.output || []) {
     if (item.type === 'message' && Array.isArray(item.content)) {
@@ -49,7 +66,7 @@ async function analyze(settings, structuredData, customTags) {
   const cred = credentials(settings);
   if (!checkConfig(cred)) return null;
 
-  const prompt = buildPrompt(structuredData, customTags);
+  const prompt = buildPrompt(structuredData, customTags, settings.provider);
   const gen = genParams(settings);
 
   try {
@@ -62,9 +79,12 @@ async function analyze(settings, structuredData, customTags) {
       ...(gen.temperature !== undefined && { temperature: gen.temperature }),
       ...(gen.maxTokens !== undefined && { max_output_tokens: gen.maxTokens })
     });
+    const failure = result ? responseError(result) : 'Empty response';
+    if (failure) throw new Error(failure);
     const rawText = extractResponseText(result);
     return rawText ? parseJsonResponse('OpenAI', rawText) : null;
   } catch (error) {
+    if (isAbortError(error)) throw error;
     console.error(`OpenAI Error (URL: ${cred.baseUrl}, model: ${cred.model}):`, error);
     return null;
   }
@@ -84,8 +104,11 @@ async function summarize(settings, prompt) {
       ...(gen.temperature !== undefined && { temperature: gen.temperature }),
       ...(gen.maxTokens !== undefined && { max_output_tokens: gen.maxTokens })
     });
+    const failure = result ? responseError(result) : 'Empty response';
+    if (failure) throw new Error(failure);
     return extractResponseText(result);
   } catch (error) {
+    if (isAbortError(error)) throw error;
     console.error(`OpenAI summarize error (URL: ${cred.baseUrl}, model: ${cred.model}):`, error);
     return null;
   }

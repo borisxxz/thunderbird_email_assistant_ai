@@ -27,7 +27,7 @@
 |---|---|---|
 | `manifest_version` | 2 或 3（MV3 需 TB ≥128） | 2（兼容性最广）✓ |
 | `browser_specific_settings.gecko.id` | 唯一 ID，上架必须；建议 `名称@你拥有的域名` | ✓ |
-| `strict_min_version` | 最低支持的 TB 版本 | 102.0 ✓ |
+| `strict_min_version` | 最低支持的 TB 版本 | 121.0 ✓（messages.tags API 要求） |
 | `icons` | 多尺寸（16/32/48/128），不定义则显示拼图图标 | ✓ |
 | `permissions` | 安装时一次性展示，用户全部接受或拒绝安装 | http/https + 邮件权限 ✓ |
 | `optional_permissions` | 运行时可申请；**临时加载的扩展无法弹授权窗（实测限制）** | 已弃用，改为内置 ✓ |
@@ -43,8 +43,8 @@
    本项目：AI 摘要按钮 ✓
 3. **compose_action** — 写信窗口按钮（本项目未用）。
 4. **menus**（右键菜单）— 关键 context：
-   - `message_list`：邮件列表区右键（批量操作入口）✓ 本项目"批量 AI 打标"
-   - `message_display`：邮件正文区右键 ✓ 本项目"AI 摘要"
+   - `message_list`：邮件列表区右键（批量操作入口）——本项目未使用
+   - `message_display`：邮件正文区右键——本项目未使用（摘要入口为 message_display_action 工具栏按钮）
    - `folder_pane` / `tab` / `tools_menu` 等其他 context 见官方表格
 
 ## 四、脚本模型
@@ -76,7 +76,7 @@
 
 ```
 manifest.json               §二
-background.html/.js         §四（常驻：自动打标 / 批量状态机 / 右键菜单）
+background.html/.js         §四（常驻：自动打标 / 批量状态机）
 options.html (+popup/summary)§四（扩展页面：设置 / 批量面板 / 摘要窗）
 src/providers/              外部 API 适配（§五 权限规则）
 _locales/{en,zh_CN}/        manifest 文案本地化（§二）
