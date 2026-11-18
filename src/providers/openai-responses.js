@@ -110,7 +110,7 @@ async function summarize(settings, prompt) {
   } catch (error) {
     if (isAbortError(error)) throw error;
     console.error(`OpenAI summarize error (URL: ${cred.baseUrl}, model: ${cred.model}):`, error);
-    return null;
+    throw error;
   }
 }
 

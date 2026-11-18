@@ -80,7 +80,7 @@ export function createOpenAICompatAdapter(providerKey) {
     } catch (error) {
       if (isAbortError(error)) throw error;
       console.error(`${label} summarize error (URL: ${cred.baseUrl}, model: ${cred.model}):`, error);
-      return null;
+      throw error;
     }
   }
 

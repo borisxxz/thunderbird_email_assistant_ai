@@ -104,9 +104,10 @@ function renderBatch(status) {
     setInlineStatus(totalFail > 0 ? 'warning' : 'success',
       totalFail > 0 ? t('popupStatusPartial', { fail: totalFail }) : t('popupStatusDone'));
   } else if (status.phase === 'cancelled') {
+    const totalFail = status.fail + (status.analysisFailed || 0);
     $('cancelled-ok').textContent = status.ok;
-    $('cancelled-fail').textContent = status.fail;
-    $('cancelled-desc').textContent = `${t('okStat')} ${status.ok} · ${t('failStat')} ${status.fail}`;
+    $('cancelled-fail').textContent = totalFail;
+    $('cancelled-desc').textContent = `${t('okStat')} ${status.ok} · ${t('failStat')} ${totalFail}`;
     setPhase('cancelled');
     setInlineStatus('warning', t('popupStatusCancelled'));
   } else if (status.phase === 'error') {

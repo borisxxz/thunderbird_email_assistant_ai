@@ -145,7 +145,7 @@ async function doTranslate() {
     text.textContent = result;
   } catch (err) {
     console.error('Email Assistant: translation failed:', err);
-    text.textContent = t('translateFailed');
+    text.textContent = `${t('translateFailed')} — ${String(err.message || err)}`;
   } finally {
     btn.disabled = false;
   }

@@ -1,6 +1,16 @@
 // Release notes shown once after an upgrade. Add an entry for each version;
 // the changelog window reads the entry matching the running manifest version.
 export const CHANGELOG = {
+  '0.0.27': {
+    en: [
+      'Corrected the minimum supported Thunderbird version to 121 — releases 0.0.24-0.0.26 wrongly declared 102.',
+      'Summary and translation failures now show the real error; the cancelled view also counts analysis failures.'
+    ],
+    'zh-CN': [
+      '最低 Thunderbird 版本修正为 121——0.0.24 至 0.0.26 曾错误声明支持 102。',
+      '摘要与翻译失败现在显示具体原因；取消页统计同样包含分析失败数。'
+    ]
+  },
   '0.0.26': {
     en: [
       'After every future update, a release-notes window will appear once automatically — including this update.',

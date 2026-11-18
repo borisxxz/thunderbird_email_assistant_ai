@@ -57,7 +57,7 @@ async function summarize(settings, prompt) {
   } catch (error) {
     if (isAbortError(error)) throw error;
     console.error(`Ollama summarize error (URL: ${baseUrl}, model: ${model}):`, error);
-    return null;
+    throw error;
   }
 }
 

@@ -74,7 +74,7 @@ async function summarize(settings, prompt) {
   } catch (error) {
     if (isAbortError(error)) throw error;
     console.error(`Gemini summarize error (URL: ${cfg.baseUrl}, model: ${cfg.model}):`, error);
-    return null;
+    throw error;
   }
 }
 
