@@ -79,6 +79,13 @@ git push origin main v0.0.27                                          # CNB
 GIT_SSH_COMMAND="ssh -o BatchMode=yes" git push github main v0.0.27   # GitHub over SSH
 ```
 
+5. **Monitor until both channels are actually live** ("pushed" is not "released"):
+
+```bash
+node scripts/verify-release.mjs v0.0.27 --wait
+```
+All five checks must PASS: both update manifests report the version and all three release assets download.
+
 Pushing the tag then does everything automatically:
 
 1. **GitHub Actions** builds → GitHub Release (zip, `-github.xpi`, `-cnb.xpi`, `updates.json`)

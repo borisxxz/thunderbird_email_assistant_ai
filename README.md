@@ -81,6 +81,13 @@ git push origin main v0.0.27                                          # CNB
 GIT_SSH_COMMAND="ssh -o BatchMode=yes" git push github main v0.0.27   # GitHub（SSH）
 ```
 
+5. **监控直到双渠道真正上线**（不是"已触发"就算完成）：
+
+```bash
+node scripts/verify-release.mjs v0.0.27 --wait
+```
+5 项全 PASS 才算发布完成：两个更新清单的版本号 + 三个 Release 附件均可下载。
+
 推送 tag 后自动完成：
 
 1. **GitHub Actions** 构建 → GitHub Release（zip、`-github.xpi`、`-cnb.xpi`、`updates.json`）
